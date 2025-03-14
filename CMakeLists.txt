@@ -20,7 +20,12 @@ find_package(DCMTK CONFIG REQUIRED)
 find_package(OpenCV REQUIRED)
 
 
-set(TS_FILES CIVITAS_ru_RU.ts)
+
+
+set(TS_FILES
+    translations/CIVITAS_ru_RU.ts
+    translations/CIVITAS_en_US.ts
+)
 
 set(PROJECT_SOURCES
         main.cpp
@@ -33,6 +38,21 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(CIVITAS
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        custominteractorstyle2d.h custominteractorstyle2d.cpp
+        gallery.h gallery.cpp
+        LanguagePacksQt.qrc
+        LanguagePacksApp.qrc
+        imageutils.h imageutils.cpp
+        datadicom.h datadicom.cpp
+
+
+
+
+
+
+
+
+
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET CIVITAS APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -56,15 +76,24 @@ else()
     qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 endif()
 
+
 target_link_libraries(CIVITAS PRIVATE
     Qt${QT_VERSION_MAJOR}::Widgets
+    ${VTK_LIBRARIES}
+    DCMTK::DCMTK
+    ${OpenCV_LIBS}
     ITKFFT
     ITKVTK
     ITKznz
     itksys
-    ${VTK_LIBRARIES}
-    DCMTK::DCMTK
-    ${OpenCV_LIBS}
+    ITKIOGDCM
+    ITKIOImageBase
+    ITKCommon
+
+
+
+
+
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.

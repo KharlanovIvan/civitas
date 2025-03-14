@@ -1,0 +1,33 @@
+<RCC>
+    <qresource prefix="/">
+        <file>resources/translations/assistant_en.qm</file>
+        <file>resources/translations/assistant_ru.qm</file>
+        <file>resources/translations/designer_en.qm</file>
+        <file>resources/translations/designer_ru.qm</file>
+        <file>resources/translations/en-GB.pak</file>
+        <file>resources/translations/en-US.pak</file>
+        <file>resources/translations/linguist_en.qm</file>
+        <file>resources/translations/linguist_ru.qm</file>
+        <file>resources/translations/qt_en.qm</file>
+        <file>resources/translations/qt_help_en.qm</file>
+        <file>resources/translations/qt_help_ru.qm</file>
+        <file>resources/translations/qt_ru.qm</file>
+        <file>resources/translations/qtbase_en.qm</file>
+        <file>resources/translations/qtbase_ru.qm</file>
+        <file>resources/translations/qtconnectivity_en.qm</file>
+        <file>resources/translations/qtconnectivity_ru.qm</file>
+        <file>resources/translations/qtdeclarative_en.qm</file>
+        <file>resources/translations/qtdeclarative_ru.qm</file>
+        <file>resources/translations/qtlocation_en.qm</file>
+        <file>resources/translations/qtlocation_ru.qm</file>
+        <file>resources/translations/qtmultimedia_en.qm</file>
+        <file>resources/translations/qtmultimedia_ru.qm</file>
+        <file>resources/translations/qtserialport_en.qm</file>
+        <file>resources/translations/qtserialport_ru.qm</file>
+        <file>resources/translations/qtwebengine_en.qm</file>
+        <file>resources/translations/qtwebengine_ru.qm</file>
+        <file>resources/translations/qtwebsockets_en.qm</file>
+        <file>resources/translations/qtwebsockets_ru.qm</file>
+        <file>resources/translations/ru.pak</file>
+    </qresource>
+</RCC>
