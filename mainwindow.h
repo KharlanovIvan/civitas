@@ -25,14 +25,12 @@
 #include <QColor>
 #include <QLabel>
 
-
-
 #include <itkGDCMSeriesFileNames.h>
 #include <itkImageSeriesReader.h>
 #include <itkGDCMImageIO.h>
 #include <itkImageToVTKImageFilter.h>
 #include <itkMinimumMaximumImageFilter.h>
-
+#include <itkImage.h>
 
 #include <QVTKOpenGLNativeWidget.h>
 #include <vtkSmartPointer.h>
@@ -49,6 +47,16 @@
 #include <vtkRendererCollection.h>
 #include <vtkCamera.h>
 #include <vtkTransform.h>
+#include <vtkRenderWindow.h>
+#include <vtkInteractorStyleImage.h>
+#include <vtkRenderWindowInteractor.h>
+#include <vtkImageMapToWindowLevelColors.h>
+
+
+
+
+
+
 
 
 
@@ -112,11 +120,16 @@ class MainWindow : public QMainWindow
     QVTKOpenGLNativeWidget *vtkWidget;
     vtkSmartPointer<vtkGenericOpenGLRenderWindow> renderWindow;
     vtkSmartPointer<vtkImageViewer2> imageViewer;
+    vtkSmartPointer<vtkRenderWindowInteractor> interactor;
+
+    // Фильтры
+    vtkSmartPointer<vtkImageMapToWindowLevelColors> windowLevelFilter;
+    vtkSmartPointer<vtkImageFlip> flipFilter;
 
 private slots:
     void openFolder();
     void openFile();
-    void initializeVTKImageViewer(const itk::Image<float, 3>::Pointer &image);
+    void initializeVTKImageViewer(const QSharedPointer<DataDICOM> &data);
     void loadDicomFromFile(const QString &filePath);
     void loadDicomFromDirectory(const QString &folderPath);
     void saveSettings();
@@ -139,6 +152,11 @@ private slots:
     void setDefaultSettings();
 
     void onThumbnailClicked(const QString &seriesUID);
+
+    void setWindowLevel(double window, double level);
+
+    void flipImage(int axis);
+
 
 
 

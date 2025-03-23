@@ -189,9 +189,10 @@ void MainWindow::onThumbnailClicked(const QString &seriesUID) {
         currentData = DICOMSeries[seriesUID];
         if (currentData->image.IsNull()) {
             itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(currentData->thumbnail);
-            initializeVTKImageViewer(itkImage);
+            currentData->image = itkImage;
+            initializeVTKImageViewer(currentData);
         } else {
-            initializeVTKImageViewer(currentData->image);
+            initializeVTKImageViewer(currentData);
         }
     }
 }
@@ -214,6 +215,16 @@ void MainWindow::openFile() {
 
         try {
             loadDicomFromFile(filePath);
+
+
+            if (currentData->image.IsNull()) {
+                itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(currentData->thumbnail);
+                currentData->image = itkImage;
+                initializeVTKImageViewer(currentData);
+            } else {
+                initializeVTKImageViewer(currentData);
+            }
+
         } catch (const itk::ExceptionObject &e) {
             qDebug() << "Ошибка ITK: " << e.what();
         } catch (const std::exception &e) {
@@ -223,16 +234,6 @@ void MainWindow::openFile() {
         qDebug() << "Выбор файла отменен.";
         return;
     }
-
-
-
-    if (currentData->image.IsNull()) {
-        itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(currentData->thumbnail);
-        initializeVTKImageViewer(itkImage);
-    } else {
-        initializeVTKImageViewer(currentData->image);
-    }
-
 }
 
 
@@ -256,6 +257,13 @@ void MainWindow::openFolder() {
         try {
             loadDicomFromDirectory(folderPath);
 
+            if (currentData->image.IsNull()) {
+                itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(currentData->thumbnail);
+                currentData->image = itkImage;
+                initializeVTKImageViewer(currentData);
+            } else {
+                initializeVTKImageViewer(currentData);
+            }
 
         } catch (const itk::ExceptionObject &e) {
             qDebug() << "Ошибка ITK: " << e.what();
@@ -266,15 +274,8 @@ void MainWindow::openFolder() {
         qDebug() << "Выбор папки отменен.";
         return;
     }
-
-
-    if (currentData->image.IsNull()) {
-        itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(currentData->thumbnail);
-        initializeVTKImageViewer(itkImage);
-    } else {
-        initializeVTKImageViewer(currentData->image);
-    }
 }
+
 
 
 void MainWindow::loadDicomFromDirectory(const QString &folderPath) {
@@ -324,6 +325,24 @@ void MainWindow::loadDicomFromDirectory(const QString &folderPath) {
             qDebug() << "Samples Per Pixel: " << QString::fromStdString(samplesPerPixel);
         }
 
+        // Извлекаем WindowCenter
+        std::string windowCenterStr;
+        if (itk::ExposeMetaData<std::string>(data->metaData, "0028|1050", windowCenterStr)) {
+            data->windowCenter = std::stod(windowCenterStr);
+            qDebug() << "WindowCenter: " << data->windowCenter;
+        } else {
+            qDebug() << "Ошибка: не удалось извлечь WindowCenter из метаданных!";
+        }
+
+        // Извлекаем WindowWidth
+        std::string windowWidthStr;
+        if (itk::ExposeMetaData<std::string>(data->metaData, "0028|1051", windowWidthStr)) {
+            data->windowWidth =  std::stod(windowWidthStr);
+            qDebug() << "WindowWidth: " << data->windowWidth;
+        } else {
+            qDebug() << "Ошибка: не удалось извлечь WindowWidth из метаданных!";
+        }
+
         std::string descriptionStr;
         if (!itk::ExposeMetaData<std::string>(data->metaData, "0008|103e", descriptionStr)) {    // Получаем Series Description
             qDebug() << "Ошибка: не удалось извлечь Series Description из метаданных.";
@@ -350,16 +369,33 @@ void MainWindow::loadDicomFromDirectory(const QString &folderPath) {
         }
 
         data->generateThumbnail();
+
+        // Если не удалось получить itkImage, то получаем его из QImage thumbnail.
+        if (data->image.IsNull()) {
+            itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(data->thumbnail);
+            data->image = itkImage;
+        }
+
         data->seriesUID = QString::fromStdString(seriesUID);
 
         DICOMSeries[QString::fromStdString(seriesUID)] = data;
 
-        currentData = DICOMSeries.value(QString::fromStdString(seriesUID));
+
+        // Инициализация currentData
+        auto it = DICOMSeries.find(QString::fromStdString(seriesUID));
+        if (it != DICOMSeries.end()) {
+            currentData = it.value();
+        } else {
+            qDebug() << "Ошибка: seriesUID не найден в DICOMSeries.";
+            return;
+        }
 
         qDebug() << "Серия " << QString::fromStdString(seriesUID) << " загружена.";
 
         gallery->addThumbnail(qDescription, &currentData->thumbnail, data->seriesUID);
+
     }
+
     gallery->sortThumbnails();
     gallery->show();
 
@@ -370,6 +406,8 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
 
 
     using ImageType = itk::Image<float, 3>;
+
+    gallery->clearThumbnails();
 
     auto dicomIO = itk::GDCMImageIO::New();
     auto reader = itk::ImageFileReader<ImageType>::New();
@@ -405,9 +443,28 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
 
     std::string seriesUID;
     if (!itk::ExposeMetaData<std::string>(data->metaData, "0008|0016", seriesUID)) {
-        qDebug() << "Ошибка: не удалось извлечь Series UID из метаданных.";
+        qDebug() << "Ошибка: не удалось извлечь Series UID из метаданных!";
         return;
     }
+
+    // Извлекаем WindowCenter
+    std::string windowCenterStr;
+    if (itk::ExposeMetaData<std::string>(data->metaData, "0028|1050", windowCenterStr)) {
+        data->windowCenter = std::stod(windowCenterStr);
+        qDebug() << "WindowCenter: " << data->windowCenter;
+    } else {
+         qDebug() << "Ошибка: не удалось извлечь WindowCenter из метаданных!";
+    }
+
+    // Извлекаем WindowWidth
+    std::string windowWidthStr;
+    if (itk::ExposeMetaData<std::string>(data->metaData, "0028|1051", windowWidthStr)) {
+        data->windowWidth =  std::stod(windowWidthStr);
+        qDebug() << "WindowWidth: " << data->windowWidth;
+    } else {
+        qDebug() << "Ошибка: не удалось извлечь WindowWidth из метаданных!";
+    }
+
 
     std::string descriptionStr;
     if (!itk::ExposeMetaData<std::string>(data->metaData, "0008|103e", descriptionStr)) {    // Получаем Series Description
@@ -431,8 +488,17 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
 
     // Сохраняем путь к файлу в DataDICOM
     data->filePaths.append(filePath);
+
     data->generateThumbnail();
+
+    // Если не удалось получить itkImage, то получаем его из QImage thumbnail.
+    if (data->image.IsNull()) {
+        itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(data->thumbnail);
+        data->image = itkImage;
+    }
+
     data->seriesUID = QString::fromStdString(seriesUID);
+
 
     DICOMSeries[QString::fromStdString(seriesUID)] = data;
 
@@ -448,7 +514,7 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
     qDebug() << "UID: " << QString::fromStdString(seriesUID) << " загружено.";
     qDebug() << "Файл сохранён по пути: " << data->filePaths[0];
 
-    gallery->clearThumbnails();
+
     gallery->addThumbnail(qDescription, &currentData->thumbnail, data->seriesUID);
     gallery->show();
 }
@@ -458,79 +524,77 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
 
 
 
-void MainWindow::initializeVTKImageViewer(const itk::Image<float, 3>::Pointer &image) {
-
-
-    // Явно очищаем старый imageViewer, если он существует
+void MainWindow::initializeVTKImageViewer(const QSharedPointer<DataDICOM> &data) {
+    // Очистка старого imageViewer (если есть)
     if (imageViewer) {
         imageViewer->GetRenderWindow()->RemoveRenderer(imageViewer->GetRenderer());
         imageViewer->GetRenderWindow()->Finalize();
-        imageViewer = nullptr;  // Уничтожаем старый объект
+        imageViewer = nullptr;
     }
 
-    // Создаём новый imageViewer
+    // Создаем новый imageViewer
     imageViewer = vtkSmartPointer<vtkImageViewer2>::New();
 
+    // Конвертируем ITK-изображение в VTK-изображение
     using ImageType = itk::Image<float, 3>;
     using ConverterType = itk::ImageToVTKImageFilter<ImageType>;
 
-    // Конвертируем ITK-изображение в VTK-изображение
     ConverterType::Pointer converter = ConverterType::New();
-    converter->SetInput(image);
+    converter->SetInput(data->image);
     converter->Update();
 
     vtkSmartPointer<vtkImageData> vtkImage = converter->GetOutput();
 
+    // Инициализация фильтров
+    windowLevelFilter = vtkSmartPointer<vtkImageMapToWindowLevelColors>::New();
+    windowLevelFilter->SetInputData(vtkImage);
+    windowLevelFilter->SetWindow(data->windowWidth); // Значения по умолчанию
+    windowLevelFilter->SetLevel(data->windowCenter);
+    windowLevelFilter->Update();
 
-
-    // Создаем фильтр для переворота изображения
-    vtkSmartPointer<vtkImageFlip> flipFilter = vtkSmartPointer<vtkImageFlip>::New();
-    flipFilter->SetInputData(vtkImage); // Устанавливаем входное изображение
-
-    // Указываем ось для переворота:
-    // 0 - ось X (горизонтальный переворот)
-    // 1 - ось Y (вертикальный переворот)
-    // 2 - ось Z (переворот по глубине)
-    flipFilter->SetFilteredAxis(1); // Переворачиваем по оси Y (вертикальный переворот)
-
-    // Запускаем фильтр
+    flipFilter = vtkSmartPointer<vtkImageFlip>::New();
+    flipFilter->SetInputConnection(windowLevelFilter->GetOutputPort());
+    flipFilter->SetFilteredAxis(1); // По умолчанию переворачиваем по оси Y
     flipFilter->Update();
 
-    // Получаем перевернутое изображение
-    vtkSmartPointer<vtkImageData> flippedImage = flipFilter->GetOutput();
+    // Устанавливаем перевернутое изображение для отображения
+    imageViewer->SetInputConnection(flipFilter->GetOutputPort());
+    imageViewer->SetRenderWindow(renderWindow);
 
-    // Устанавливаем перевернутое изображение для отображения в imageViewer
-    imageViewer->SetInputData(flippedImage);
-    imageViewer->SetRenderWindow(renderWindow);  // Устанавливаем рендер-окно для imageViewer
+    // Настройка интерактора
+    interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
+    interactor->SetRenderWindow(renderWindow);
 
-
-    // Устанавливаем ориентацию среза
-    //imageViewer->SetSliceOrientationToXY();  // Если нужно отображать срезы в плоскости XY
-    //imageViewer->SetSliceOrientationToXZ();  // Если нужно отображать срезы в плоскости XZ
-    //imageViewer->SetSliceOrientationToYZ();  // Если нужно отображать срезы в плоскости YZ
-
-    // Устанавливаем срезы в imageViewer, если они не были установлены
-    //imageViewer->SetSlice(0);  // Начальный срез
-
-    // Создаем и настраиваем интерактор
-    auto interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
-    interactor->SetRenderWindow(renderWindow);  // Привязываем интерактор к рендер-окну
-
-    // Создаем кастомный стиль интерактора
     auto interactorStyle = vtkSmartPointer<CustomInteractorStyle2D>::New();
-    interactorStyle->SetImageViewer(imageViewer);  // Привязываем imageViewer к интерактору
-    interactor->SetInteractorStyle(interactorStyle);  // Устанавливаем стиль интерактора
-    interactorStyle->EnableScrolling(true);  // Включаем листание срезов
+    interactorStyle->SetImageViewer(imageViewer);
+    interactor->SetInteractorStyle(interactorStyle);
+    interactorStyle->EnableScrolling(true);
 
     // Инициализируем интерактор
     interactor->Initialize();
 
-    qDebug() << "imageViewer->GetSliceMin();" << imageViewer->GetSliceMin();
-    qDebug() << "imageViewer->GetSliceMax();" << imageViewer->GetSliceMax();
-
     // Рендерим изображение
     imageViewer->Render();
 }
+
+
+void MainWindow::setWindowLevel(double window, double level) {
+    if (windowLevelFilter) {
+        windowLevelFilter->SetWindow(window);
+        windowLevelFilter->SetLevel(level);
+        windowLevelFilter->Update();
+        imageViewer->Render();
+    }
+}
+
+void MainWindow::flipImage(int axis) {
+    if (flipFilter) {
+        flipFilter->SetFilteredAxis(axis);
+        flipFilter->Update();
+        imageViewer->Render();
+    }
+}
+
 
 
 

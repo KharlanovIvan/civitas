@@ -14,6 +14,10 @@ class DataDICOM
 public:
 
     QString seriesUID;
+
+    double windowWidth;
+    double windowCenter;
+
     QImage thumbnail;  // Теперь QImage хранится непосредственно в структуре
     itk::MetaDataDictionary metaData;
     itk::Image<float, 3>::Pointer image;
