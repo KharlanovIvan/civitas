@@ -3,28 +3,23 @@
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
+    projectionViewAxial.vtkWidget = new QVTKOpenGLNativeWidget();
+    projectionViewSagital.vtkWidget = new QVTKOpenGLNativeWidget();
+    projectionViewSagital.sliceOrientation = vtkImageViewer2::SLICE_ORIENTATION_XZ;
+    projectionViewFrontal.vtkWidget = new QVTKOpenGLNativeWidget();
+    projectionViewFrontal.sliceOrientation = vtkImageViewer2::SLICE_ORIENTATION_YZ;
 
-    resize(1024, 768);
+    centralWidget = new QWidget(this);
+    gridLayoutCentralWidget = new QGridLayout();
 
-    vtkWidget = new QVTKOpenGLNativeWidget(this);
-    setCentralWidget(vtkWidget);
+    setCentralWidget(centralWidget);
+    centralWidget->setLayout(gridLayoutCentralWidget);
 
+    gridLayoutCentralWidget->addWidget(projectionViewAxial.vtkWidget);
 
 
     // Создание интерфейса
     setupUI();
-
-
-
-
-    // Инициализируем объекты VTK и ITK
-    imageViewer = vtkSmartPointer<vtkImageViewer2>::New();
-    renderWindow = vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New();
-    vtkWidget->setRenderWindow(renderWindow);
-
-    // Загрузка настроек
-    restoreSettings();
-
 
 }
 
@@ -80,6 +75,8 @@ void MainWindow::initGallery() {
     });
 
     connect(gallery, &Gallery::thumbnailClicked, this, &MainWindow::onThumbnailClicked);
+
+    gallery->hide();
 }
 
 void MainWindow::initFileMenu() {
@@ -187,12 +184,32 @@ void MainWindow::updateUI() {
 void MainWindow::onThumbnailClicked(const QString &seriesUID) {
     if (DICOMSeries.contains(seriesUID)) {
         currentData = DICOMSeries[seriesUID];
-        if (currentData->image.IsNull()) {
-            itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(currentData->thumbnail);
-            currentData->image = itkImage;
-            initializeVTKImageViewer(currentData);
+        if (currentData->getITKImage().IsNull()) {
+            itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(currentData->getThumbnail());
+            currentData->setITKImage(itkImage);
+        }
+        if (currentData->convertITKtoVTK()) {
+
+            if (MPR) {
+                // Добавляем виджеты в макет
+                gridLayoutCentralWidget->addWidget(projectionViewAxial.vtkWidget, 0, 0, 2, 1);
+                gridLayoutCentralWidget->addWidget(projectionViewSagital.vtkWidget, 0, 1);
+                gridLayoutCentralWidget->addWidget(projectionViewFrontal.vtkWidget, 1, 1);
+
+                // Растяжение колонок
+                gridLayoutCentralWidget->setColumnStretch(0, 2);
+                gridLayoutCentralWidget->setColumnStretch(1, 1);
+
+                QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewAxial); });
+                QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewSagital); });
+                QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewFrontal); });
+
+            } else {
+                initializeVTKImageViewer(currentData, projectionViewAxial);
+            }
+
         } else {
-            initializeVTKImageViewer(currentData);
+            qDebug() << "MainWindow::onThumbnailClicked: Ошибка инициализации компонентов отображения VTK виджета!";
         }
     }
 }
@@ -216,13 +233,14 @@ void MainWindow::openFile() {
         try {
             loadDicomFromFile(filePath);
 
-
-            if (currentData->image.IsNull()) {
-                itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(currentData->thumbnail);
-                currentData->image = itkImage;
-                initializeVTKImageViewer(currentData);
+            if (currentData->getITKImage().IsNull()) {
+                itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(currentData->getThumbnail());
+                currentData->setITKImage(itkImage);
+            }
+            if (currentData->convertITKtoVTK()) {
+                initializeVTKImageViewer(currentData, projectionViewAxial);
             } else {
-                initializeVTKImageViewer(currentData);
+                qDebug() << "MainWindow::openFile: Ошибка инициализации компонентов отображения VTK виджета!";
             }
 
         } catch (const itk::ExceptionObject &e) {
@@ -235,6 +253,8 @@ void MainWindow::openFile() {
         return;
     }
 }
+
+
 
 
 void MainWindow::openFolder() {
@@ -257,12 +277,38 @@ void MainWindow::openFolder() {
         try {
             loadDicomFromDirectory(folderPath);
 
-            if (currentData->image.IsNull()) {
-                itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(currentData->thumbnail);
-                currentData->image = itkImage;
-                initializeVTKImageViewer(currentData);
+            if (currentData->getITKImage().IsNull()) {
+                itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(currentData->getThumbnail());
+                currentData->setITKImage(itkImage);
+            }
+
+            if (currentData->convertITKtoVTK()) {
+
+                if (MPR) {
+                    // Добавляем виджеты в макет
+                    gridLayoutCentralWidget->addWidget(projectionViewAxial.vtkWidget, 0, 0, 2, 1);
+                    gridLayoutCentralWidget->addWidget(projectionViewSagital.vtkWidget, 0, 1);
+                    gridLayoutCentralWidget->addWidget(projectionViewFrontal.vtkWidget, 1, 1);
+
+                    // Растяжение колонок
+                    gridLayoutCentralWidget->setColumnStretch(0, 2);
+                    gridLayoutCentralWidget->setColumnStretch(1, 1);
+
+                    if (!currentData->getDeepCopyVTKImage()) {
+                        qWarning() << "VTK изображение не готово! Ожидаем...";
+                        return;
+                    }
+
+                    QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewAxial); });
+                    QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewSagital); });
+                    QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewFrontal); });
+
+                } else {
+                    initializeVTKImageViewer(currentData, projectionViewAxial);
+                }
+
             } else {
-                initializeVTKImageViewer(currentData);
+                qDebug() << "MainWindow::openFolder: Ошибка инициализации компонентов отображения VTK виджета!";
             }
 
         } catch (const itk::ExceptionObject &e) {
@@ -308,7 +354,7 @@ void MainWindow::loadDicomFromDirectory(const QString &folderPath) {
 
         QSharedPointer<DataDICOM> data(new DataDICOM);
 
-        data->metaData = dicomIO->GetMetaDataDictionary();
+        data->setMetadata(dicomIO->GetMetaDataDictionary());
 
         std::string photometric;
         if (itk::ExposeMetaData<std::string>(dicomIO->GetMetaDataDictionary(), "0028|0004", photometric)) {
@@ -327,56 +373,56 @@ void MainWindow::loadDicomFromDirectory(const QString &folderPath) {
 
         // Извлекаем WindowCenter
         std::string windowCenterStr;
-        if (itk::ExposeMetaData<std::string>(data->metaData, "0028|1050", windowCenterStr)) {
-            data->windowCenter = std::stod(windowCenterStr);
-            qDebug() << "WindowCenter: " << data->windowCenter;
+        if (itk::ExposeMetaData<std::string>(data->getMetaData(), "0028|1050", windowCenterStr)) {
+            data->setWindowCenter(std::stod(windowCenterStr));
+            qDebug() << "WindowCenter: " << data->getWindowCenter();
         } else {
             qDebug() << "Ошибка: не удалось извлечь WindowCenter из метаданных!";
         }
 
         // Извлекаем WindowWidth
         std::string windowWidthStr;
-        if (itk::ExposeMetaData<std::string>(data->metaData, "0028|1051", windowWidthStr)) {
-            data->windowWidth =  std::stod(windowWidthStr);
-            qDebug() << "WindowWidth: " << data->windowWidth;
+        if (itk::ExposeMetaData<std::string>(data->getMetaData(), "0028|1051", windowWidthStr)) {
+            data->setWindowWidth(std::stod(windowWidthStr));
+            qDebug() << "WindowWidth: " << data->getWindowWidth();
         } else {
             qDebug() << "Ошибка: не удалось извлечь WindowWidth из метаданных!";
         }
 
         std::string descriptionStr;
-        if (!itk::ExposeMetaData<std::string>(data->metaData, "0008|103e", descriptionStr)) {    // Получаем Series Description
+        if (!itk::ExposeMetaData<std::string>(data->getMetaData(), "0008|103e", descriptionStr)) {    // Получаем Series Description
             qDebug() << "Ошибка: не удалось извлечь Series Description из метаданных.";
         }
 
         QString qDescription = QString::fromStdString(descriptionStr);
         if (qDescription.isEmpty()) {
-            qDescription = data->seriesUID;
+            qDescription = data->getSeriesUID();
         }
 
         if(qDescription.contains("Topogram") || qDescription.contains("Patient Protocol")) {
             qDebug() << "Получено служебное изображения";
         } else {
-            data->image = reader->GetOutput();
+            data->setITKImage(reader->GetOutput());
             qDebug() << "DICOM файл загружен, размер: "
-                     << data->image->GetLargestPossibleRegion().GetSize()[0] << " x "
-                     << data->image->GetLargestPossibleRegion().GetSize()[1] << " x "
-                     << data->image->GetLargestPossibleRegion().GetSize()[2];
+                     << data->getITKImage()->GetLargestPossibleRegion().GetSize()[0] << " x "
+                     << data->getITKImage()->GetLargestPossibleRegion().GetSize()[1] << " x "
+                     << data->getITKImage()->GetLargestPossibleRegion().GetSize()[2];
         }
 
         // Сохраняем список файлов
         for (const auto &file : files) {
-            data->filePaths.append(QString::fromStdString(file));
+            data->addFilePath(QString::fromStdString(file));
         }
 
         data->generateThumbnail();
 
         // Если не удалось получить itkImage, то получаем его из QImage thumbnail.
-        if (data->image.IsNull()) {
-            itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(data->thumbnail);
-            data->image = itkImage;
+        if (data->getITKImage().IsNull()) {
+            itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(data->getThumbnail());
+            data->getITKImage() = itkImage;
         }
 
-        data->seriesUID = QString::fromStdString(seriesUID);
+        data->setSeriesUID(QString::fromStdString(seriesUID));
 
         DICOMSeries[QString::fromStdString(seriesUID)] = data;
 
@@ -392,7 +438,7 @@ void MainWindow::loadDicomFromDirectory(const QString &folderPath) {
 
         qDebug() << "Серия " << QString::fromStdString(seriesUID) << " загружена.";
 
-        gallery->addThumbnail(qDescription, &currentData->thumbnail, data->seriesUID);
+        gallery->addThumbnail(qDescription, &currentData->getThumbnail(), data->getSeriesUID());
 
     }
 
@@ -424,7 +470,7 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
 
     QSharedPointer<DataDICOM> data(new DataDICOM);
 
-    data->metaData = dicomIO->GetMetaDataDictionary();
+    data->setMetadata(dicomIO->GetMetaDataDictionary());
 
     std::string photometric;
     if (itk::ExposeMetaData<std::string>(dicomIO->GetMetaDataDictionary(), "0028|0004", photometric)) {
@@ -442,62 +488,62 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
     }
 
     std::string seriesUID;
-    if (!itk::ExposeMetaData<std::string>(data->metaData, "0008|0016", seriesUID)) {
+    if (!itk::ExposeMetaData<std::string>(data->getMetaData(), "0008|0016", seriesUID)) {
         qDebug() << "Ошибка: не удалось извлечь Series UID из метаданных!";
         return;
     }
 
     // Извлекаем WindowCenter
     std::string windowCenterStr;
-    if (itk::ExposeMetaData<std::string>(data->metaData, "0028|1050", windowCenterStr)) {
-        data->windowCenter = std::stod(windowCenterStr);
-        qDebug() << "WindowCenter: " << data->windowCenter;
+    if (itk::ExposeMetaData<std::string>(data->getMetaData(), "0028|1050", windowCenterStr)) {
+        data->setWindowCenter(std::stod(windowCenterStr));
+        qDebug() << "WindowCenter: " << data->getWindowCenter();
     } else {
          qDebug() << "Ошибка: не удалось извлечь WindowCenter из метаданных!";
     }
 
     // Извлекаем WindowWidth
     std::string windowWidthStr;
-    if (itk::ExposeMetaData<std::string>(data->metaData, "0028|1051", windowWidthStr)) {
-        data->windowWidth =  std::stod(windowWidthStr);
-        qDebug() << "WindowWidth: " << data->windowWidth;
+    if (itk::ExposeMetaData<std::string>(data->getMetaData(), "0028|1051", windowWidthStr)) {
+        data->setWindowWidth(std::stod(windowWidthStr));
+        qDebug() << "WindowWidth: " << data->getWindowWidth();
     } else {
         qDebug() << "Ошибка: не удалось извлечь WindowWidth из метаданных!";
     }
 
 
     std::string descriptionStr;
-    if (!itk::ExposeMetaData<std::string>(data->metaData, "0008|103e", descriptionStr)) {    // Получаем Series Description
+    if (!itk::ExposeMetaData<std::string>(data->getMetaData(), "0008|103e", descriptionStr)) {    // Получаем Series Description
         qDebug() << "Ошибка: не удалось извлечь Series Description из метаданных.";
     }
 
     QString qDescription = QString::fromStdString(descriptionStr);
     if (qDescription.isEmpty()) {
-        qDescription = data->seriesUID;
+        qDescription = data->getSeriesUID();
     }
 
     if(qDescription.contains("Topogram") || qDescription.contains("Patient Protocol")) {
         qDebug() << "Получено служебное изображения";
     } else {
-        data->image = reader->GetOutput();
+        data->setITKImage(reader->GetOutput());
         qDebug() << "DICOM файл загружен, размер: "
-                 << data->image->GetLargestPossibleRegion().GetSize()[0] << " x "
-                 << data->image->GetLargestPossibleRegion().GetSize()[1] << " x "
-                 << data->image->GetLargestPossibleRegion().GetSize()[2];
+                 << data->getITKImage()->GetLargestPossibleRegion().GetSize()[0] << " x "
+                 << data->getITKImage()->GetLargestPossibleRegion().GetSize()[1] << " x "
+                 << data->getITKImage()->GetLargestPossibleRegion().GetSize()[2];
     }
 
     // Сохраняем путь к файлу в DataDICOM
-    data->filePaths.append(filePath);
+    data->addFilePath(filePath);
 
     data->generateThumbnail();
 
     // Если не удалось получить itkImage, то получаем его из QImage thumbnail.
-    if (data->image.IsNull()) {
-        itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(data->thumbnail);
-        data->image = itkImage;
+    if (data->getITKImage().IsNull()) {
+        itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(data->getThumbnail());
+        data->getITKImage() = itkImage;
     }
 
-    data->seriesUID = QString::fromStdString(seriesUID);
+    data->setSeriesUID(QString::fromStdString(seriesUID));
 
 
     DICOMSeries[QString::fromStdString(seriesUID)] = data;
@@ -512,90 +558,99 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
     }
 
     qDebug() << "UID: " << QString::fromStdString(seriesUID) << " загружено.";
-    qDebug() << "Файл сохранён по пути: " << data->filePaths[0];
+    qDebug() << "Файл сохранён по пути: " << data->getFilePaths()[0];
 
 
-    gallery->addThumbnail(qDescription, &currentData->thumbnail, data->seriesUID);
+    gallery->addThumbnail(qDescription, &currentData->getThumbnail(), data->getSeriesUID());
     gallery->show();
+
+
 }
 
 
 
 
+void MainWindow::initializeVTKImageViewer(
+    const QSharedPointer<DataDICOM>& data,
+    ProjectionView &projectionView) {
+    qDebug() << "void MainWindow::initializeVTKImageViewer - start";
+
+   projectionView.renderWindow = vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New();
+    // Очистка предыдущего рендера
+    if (projectionView.imageViewer) {
+        projectionView.imageViewer->GetRenderWindow()->RemoveRenderer(projectionView.imageViewer->GetRenderer());
+        projectionView.renderWindow->Finalize();
+    }
+    qDebug() << "void MainWindow::initializeVTKImageViewer: Очистка предыдущего рендера выполнена, инициализация нового...";
+    // Инициализация нового
+    projectionView.imageViewer = vtkSmartPointer<vtkImageViewer2>::New();
+    projectionView.vtkWidget->setRenderWindow(projectionView.renderWindow);
+
+    qDebug() << "void MainWindow::initializeVTKImageViewer: Получаем VTK изображение (потокобезопасно)...";
+    // Получаем VTK изображение (потокобезопасно)
+
+    qDebug() << "void MainWindow::initializeVTKImageViewer: Настройка фильтров (уникальные для каждого вида)...";
+    // Настройка фильтров (уникальные для каждого вида)
+    if (!projectionView.windowLevelFilter) {
+        projectionView.windowLevelFilter = vtkSmartPointer<vtkImageMapToWindowLevelColors>::New();
+    }
+    projectionView.windowLevelFilter->SetInputData(data->getVTKImage());
+    projectionView.windowLevelFilter->SetWindow(data->getWindowWidth());
+    projectionView.windowLevelFilter->SetLevel(data->getWindowCenter());
 
 
-void MainWindow::initializeVTKImageViewer(const QSharedPointer<DataDICOM> &data) {
-    // Очистка старого imageViewer (если есть)
-    if (imageViewer) {
-        imageViewer->GetRenderWindow()->RemoveRenderer(imageViewer->GetRenderer());
-        imageViewer->GetRenderWindow()->Finalize();
-        imageViewer = nullptr;
+    qDebug() << "void MainWindow::initializeVTKImageViewer: flipFilter...";
+    if (!projectionView.flipFilter) {
+        projectionView.flipFilter = vtkSmartPointer<vtkImageFlip>::New();
+    }
+    projectionView.flipFilter->SetInputConnection(projectionView.windowLevelFilter->GetOutputPort());
+    projectionView.flipFilter->SetFilteredAxis(1);
+
+
+    qDebug() << "void MainWindow::initializeVTKImageViewer: Настройка imageViewer...";
+    // Настройка imageViewer
+    projectionView.imageViewer->SetInputConnection(projectionView.flipFilter->GetOutputPort());
+    projectionView.imageViewer->SetRenderWindow(projectionView.renderWindow);
+
+    // Ориентация среза
+    switch (projectionView.sliceOrientation) {
+    case vtkImageViewer2::SLICE_ORIENTATION_XY:
+        projectionView.imageViewer->SetSliceOrientationToXY();
+        break;
+    case vtkImageViewer2::SLICE_ORIENTATION_XZ:
+        projectionView.imageViewer->SetSliceOrientationToXZ();
+        break;
+    case vtkImageViewer2::SLICE_ORIENTATION_YZ:
+        projectionView.imageViewer->SetSliceOrientationToYZ();
+        break;
+    default:
+        qDebug() << "Неизвестная ориентация, установлена XY.";
+        projectionView.imageViewer->SetSliceOrientationToXY();
+        break;
     }
 
-    // Создаем новый imageViewer
-    imageViewer = vtkSmartPointer<vtkImageViewer2>::New();
-
-    // Конвертируем ITK-изображение в VTK-изображение
-    using ImageType = itk::Image<float, 3>;
-    using ConverterType = itk::ImageToVTKImageFilter<ImageType>;
-
-    ConverterType::Pointer converter = ConverterType::New();
-    converter->SetInput(data->image);
-    converter->Update();
-
-    vtkSmartPointer<vtkImageData> vtkImage = converter->GetOutput();
-
-    // Инициализация фильтров
-    windowLevelFilter = vtkSmartPointer<vtkImageMapToWindowLevelColors>::New();
-    windowLevelFilter->SetInputData(vtkImage);
-    windowLevelFilter->SetWindow(data->windowWidth); // Значения по умолчанию
-    windowLevelFilter->SetLevel(data->windowCenter);
-    windowLevelFilter->Update();
-
-    flipFilter = vtkSmartPointer<vtkImageFlip>::New();
-    flipFilter->SetInputConnection(windowLevelFilter->GetOutputPort());
-    flipFilter->SetFilteredAxis(1); // По умолчанию переворачиваем по оси Y
-    flipFilter->Update();
-
-    // Устанавливаем перевернутое изображение для отображения
-    imageViewer->SetInputConnection(flipFilter->GetOutputPort());
-    imageViewer->SetRenderWindow(renderWindow);
-
+    qDebug() << "void MainWindow::initializeVTKImageViewer: Настройка интерактора...";
     // Настройка интерактора
-    interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
-    interactor->SetRenderWindow(renderWindow);
-
-    auto interactorStyle = vtkSmartPointer<CustomInteractorStyle2D>::New();
-    interactorStyle->SetImageViewer(imageViewer);
-    interactor->SetInteractorStyle(interactorStyle);
-    interactorStyle->EnableScrolling(true);
-
-    // Инициализируем интерактор
-    interactor->Initialize();
-
-    // Рендерим изображение
-    imageViewer->Render();
-}
-
-
-void MainWindow::setWindowLevel(double window, double level) {
-    if (windowLevelFilter) {
-        windowLevelFilter->SetWindow(window);
-        windowLevelFilter->SetLevel(level);
-        windowLevelFilter->Update();
-        imageViewer->Render();
+    if (!projectionView.interactor) {
+        projectionView.interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
     }
-}
+    projectionView.interactor->SetRenderWindow(projectionView.renderWindow);
 
-void MainWindow::flipImage(int axis) {
-    if (flipFilter) {
-        flipFilter->SetFilteredAxis(axis);
-        flipFilter->Update();
-        imageViewer->Render();
+    qDebug() << "void MainWindow::initializeVTKImageViewer: Создание стиля интерактора...";
+    if (!projectionView.interactorStyle) {
+        projectionView.interactorStyle = vtkSmartPointer<CustomInteractorStyle2D>::New();
     }
+    projectionView.interactorStyle->SetImageViewer(projectionView.imageViewer);
+    projectionView.interactor->SetInteractorStyle(projectionView.interactorStyle);
+    projectionView.interactorStyle->EnableScrolling(true);
+
+
+    qDebug() << "void MainWindow::initializeVTKImageViewer: Инициализация интерактора...";
+    projectionView.interactor->Initialize();
+    qDebug() << "void MainWindow::initializeVTKImageViewer: Инициализация рендера imageViewer...";
+    projectionView.imageViewer->Render();
+    qDebug() << "void MainWindow::initializeVTKImageViewer - finish";
 }
-
-
 
 
 
@@ -632,9 +687,6 @@ void MainWindow::changeLanguage(const QString &nameLanguage) {
         qDebug() << "Ошибка при загрузке перевода!" << a;
     }
 
-    // Сохраняем язык в настройки
-    saveSettings();
-
     // Обновляем UI
     updateUI();
 
@@ -656,7 +708,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 
     if (reply == QMessageBox::Yes) {
         // Сохраняем данные перед закрытием
-        //saveSettings();
+        saveSettings();
 
         // Принимаем событие закрытия
         event->accept();
@@ -669,13 +721,19 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 void MainWindow::saveSettings() {
     QSettings settings("CIVITAS MedTech", "CIVITAS");
 
+
     // Сохраняем размер и положение окна
     settings.setValue("windowSize", size());
+    qDebug() << "void MainWindow::saveSettings: сохраненные размеры окна: " << settings.value("windowSize").toSize();
     settings.setValue("windowPosition", pos());
+
     settings.setValue("language", currentLanguage);
 
     // Сохраняем состояние док-виджетов
     settings.setValue("galleryVisible", pActGalleryPanel->isChecked());
+
+    settings.sync();
+
 }
 
 void MainWindow::restoreSettings() {
@@ -683,12 +741,15 @@ void MainWindow::restoreSettings() {
 
     // Если первый запуск — задаем дефолтные настройки
     if (settings.allKeys().isEmpty()) {
+        qDebug() << "MainWindow::restoreSettings: Сохраненных настроек не обнаружено.";
         setDefaultSettings();
     }
 
     // Теперь загружаем настройки
     QString savedLang = settings.value("language").toString();
     changeLanguage(savedLang);
+
+    qDebug() << "MainWindow::restoreSettings: сохраненные размеры окна: " << settings.value("windowSize").toSize();
 
     resize(settings.value("windowSize").toSize());
     move(settings.value("windowPosition").toPoint());
@@ -707,5 +768,17 @@ void MainWindow::setDefaultSettings() {
     settings.setValue("windowPosition", QPoint(100, 100));
     settings.setValue("galleryVisible", true);
     settings.sync();  // Сохранить настройки
+}
+
+
+void MainWindow::showEvent(QShowEvent *event) {
+    QMainWindow::showEvent(event);  // Вызов базовой реализации
+
+    qDebug() << "MainWindow::showEvent: Загрузка сохраненных настроек...";
+    static bool firstShow = true;
+    if (firstShow) {  // Гарантируем, что restoreSettings() вызывается только один раз
+        firstShow = false;
+        restoreSettings();
+    }
 }
 

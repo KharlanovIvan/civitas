@@ -24,6 +24,7 @@
 #include <QImage>
 #include <QColor>
 #include <QLabel>
+#include <QTimer>
 
 #include <itkGDCMSeriesFileNames.h>
 #include <itkImageSeriesReader.h>
@@ -54,24 +55,58 @@
 
 
 
-
-
-
-
-
-
-
-
 #include "custominteractorstyle2d.h"
 #include "gallery.h"
 #include "imageutils.h"
 #include "datadicom.h"
 
 
+struct ProjectionView {
+    QVTKOpenGLNativeWidget* vtkWidget;
+    vtkSmartPointer<vtkImageViewer2> imageViewer;
+    vtkSmartPointer<vtkGenericOpenGLRenderWindow> renderWindow;
+    vtkSmartPointer<vtkRenderWindowInteractor> interactor;
+    vtkSmartPointer<CustomInteractorStyle2D> interactorStyle;
+    vtkSmartPointer<vtkImageMapToWindowLevelColors> windowLevelFilter;
+    vtkSmartPointer<vtkImageFlip> flipFilter;
+
+    int sliceOrientation = vtkImageViewer2::SLICE_ORIENTATION_XY;
+
+    ProjectionView(QWidget* parent = nullptr) :
+        vtkWidget(new QVTKOpenGLNativeWidget(parent)) {}
+
+
+    void setWindowLevel(double window, double level) {
+        if (windowLevelFilter) {
+            windowLevelFilter->SetWindow(window);
+            windowLevelFilter->SetLevel(level);
+            windowLevelFilter->Update();
+            imageViewer->Render();
+        }
+    }
+
+    void flipImage(int axis) {
+        if (flipFilter) {
+            flipFilter->SetFilteredAxis(axis);
+            flipFilter->Update();
+            imageViewer->Render();
+        }
+    }
+
+};
+
+
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
+
+    bool MPR = true;
+
+    ProjectionView projectionViewAxial;
+    ProjectionView projectionViewSagital;
+    ProjectionView projectionViewFrontal;
+    QGridLayout *gridLayoutCentralWidget;
 
     QSharedPointer<DataDICOM> currentData;
 
@@ -117,19 +152,14 @@ class MainWindow : public QMainWindow
 
     Gallery* gallery;
 
-    QVTKOpenGLNativeWidget *vtkWidget;
-    vtkSmartPointer<vtkGenericOpenGLRenderWindow> renderWindow;
-    vtkSmartPointer<vtkImageViewer2> imageViewer;
-    vtkSmartPointer<vtkRenderWindowInteractor> interactor;
-
-    // Фильтры
-    vtkSmartPointer<vtkImageMapToWindowLevelColors> windowLevelFilter;
-    vtkSmartPointer<vtkImageFlip> flipFilter;
-
 private slots:
     void openFolder();
     void openFile();
-    void initializeVTKImageViewer(const QSharedPointer<DataDICOM> &data);
+
+    void initializeVTKImageViewer(
+        const QSharedPointer<DataDICOM>& data,
+        ProjectionView &projectionView);
+
     void loadDicomFromFile(const QString &filePath);
     void loadDicomFromDirectory(const QString &folderPath);
     void saveSettings();
@@ -153,9 +183,9 @@ private slots:
 
     void onThumbnailClicked(const QString &seriesUID);
 
-    void setWindowLevel(double window, double level);
 
-    void flipImage(int axis);
+
+
 
 
 
@@ -165,6 +195,7 @@ private slots:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    void showEvent(QShowEvent *event) override;
 
 
 public:

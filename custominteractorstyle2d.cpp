@@ -16,7 +16,7 @@ void CustomInteractorStyle2D::SetImageViewer(vtkSmartPointer<vtkImageViewer2> vi
 
         // Получаем размер изображения
         auto size = ImageViewer->GetSize();
-        qDebug() << "Image Size:" << size[0] << "x" << size[1] << "x" << size[2];
+        qDebug() << "CustomInteractorStyle2D::SetImageViewer:Image Size:" << size[0] << "x" << size[1] << "x" << size[2];
 
     }
 }
