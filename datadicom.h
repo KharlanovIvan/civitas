@@ -7,6 +7,9 @@
 #include <QStringList>
 #include <QSharedPointer>
 
+#include <dcmtk/dcmdata/dctk.h>
+#include <dcmtk/dcmimgle/dcmimage.h>
+
 #include <itkGDCMSeriesFileNames.h>
 #include <itkImageSeriesReader.h>
 #include <itkImage.h>
@@ -67,6 +70,7 @@ private:
     double windowWidth = 400;
     double windowCenter = 50;
 
+
     QImage thumbnail;  // Миниатюра серии
 
     itk::MetaDataDictionary metaData; // Метаданные ITK
@@ -75,5 +79,6 @@ private:
     using ImageType = itk::Image<float, 3>;
     ImageType::Pointer ITKImage;
     vtkSmartPointer<vtkImageData> VTKImage;
+
     bool vtkImageReady = false; // Флаг готовности VTK данных
 };

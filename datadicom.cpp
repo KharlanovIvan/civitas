@@ -141,6 +141,8 @@ bool DataDICOM::isVTKImageReady() const {
 }
 
 
+
+
 void DataDICOM::generateThumbnail() {
     if (filePaths.empty()) {
         qDebug() << "DataDICOM::generateThumbnail: filePaths is empty!";
@@ -148,40 +150,81 @@ void DataDICOM::generateThumbnail() {
     }
 
     int thumbnailIndex = filePaths.size() / 2;
-    unsigned short bitsAllocated = 0; // Обычно 16 бит в DICOM
+    unsigned short bitsAllocated = 16; // Обычно 16 бит в DICOM
+
+    using ImageType = itk::Image<float, 3>;
+
+    auto dicomIO = itk::GDCMImageIO::New();
+    auto reader = itk::ImageFileReader<ImageType>::New();
+    reader->SetFileName(filePaths[thumbnailIndex].toStdString());
+    reader->SetImageIO(dicomIO);
 
     try {
-        // Извлекаем BitsAllocated
-        if (metaData.HasKey("0028|0100")) {
-            std::string bitsAllocatedStr;
-            itk::ExposeMetaData(metaData, "0028|0100", bitsAllocatedStr);
-            qDebug() << "BitsAllocated (str): " << bitsAllocatedStr;
+        reader->Update();
+    } catch (itk::ExceptionObject &error) {
+        qDebug() << "DataDICOM::generateThumbnail: Ошибка при чтении DICOM-файла:" << error.what();
+        return;
+    }
 
-            bitsAllocated = static_cast<unsigned short>(std::stoi(bitsAllocatedStr));
-        } else {
-            qWarning() << "DataDICOM::generateThumbnail: Key '0028|0100' not found in metadata!";
-            return;
+    std::string bitsAllocatedStr;
+    if (itk::ExposeMetaData<std::string>(metaData, "0028|0100", bitsAllocatedStr)) {
+        qDebug() << "DataDICOM::generateThumbnail: Bits Allocated - " << QString::fromStdString(bitsAllocatedStr);
+
+        bitsAllocated = QString::fromStdString(bitsAllocatedStr).toUShort();
+    }
+
+    ImageType::Pointer originalITKImage = reader->GetOutput();
+    itk::ImageRegionConstIterator<ImageType> origIt(
+        originalITKImage,
+        originalITKImage->GetLargestPossibleRegion()
+        );
+
+    float origMin = std::numeric_limits<float>::max();
+    float origMax = std::numeric_limits<float>::lowest();
+    for (origIt.GoToBegin(); !origIt.IsAtEnd(); ++origIt) {
+        const float val = origIt.Get();
+        origMin = std::min(origMin, val);
+        origMax = std::max(origMax, val);
+    }
+    qDebug() << "DataDICOM::generateThumbnail: Original data range in ITKImage:" << origMin << "-" << origMax; // 0 - 0 означает, что все пиксели изображения имеют одинаковую интенсивность (значение 0)
+
+    const float epsilon = 1e-6f; // Допустимая погрешность
+
+    if (std::abs(origMin - 0.0f) < epsilon && std::abs(origMax - 0.0f) < epsilon) {
+        // Все пиксели близки к нулю в пределах погрешности
+        qDebug() << "DataDICOM::generateThumbnail: Все пиксели в ImageType::Pointer originalITKImage нулевые (или почти нулевые)";
+
+        try {
+            // Загружаем DICOM-файл
+            QScopedPointer<DcmFileFormat> fileFormat(ImageUtils::loadDcmFileFormat(filePaths.at(thumbnailIndex)));
+            if (!fileFormat) {
+                qWarning() << "Ошибка загрузки DCM-файла!";
+                return;
+            }
+
+            QScopedPointer<DicomImage> dicomImage(ImageUtils::getDicomImageFromDcmFileFormat(fileFormat.data()));
+            if (!dicomImage || dicomImage->getStatus() != EIS_Normal) {
+                qWarning() << "Ошибка обработки DICOM-изображения!";
+                return;
+            }
+
+            // Конвертация в QImage
+            thumbnail = ImageUtils::dicomImageToQImage(dicomImage.data(), static_cast<Uint16>(bitsAllocated));
+
+
+        } catch (const std::exception& e) {
+            qCritical() << "DataDICOM::generateThumbnail: Exception occurred:" << e.what();
+        } catch (...) {
+            qCritical() << "DataDICOM::generateThumbnail: Unknown exception occurred!";
         }
+    } else {
 
-        // Загружаем DICOM-файл
-        QScopedPointer<DcmFileFormat> fileFormat(ImageUtils::loadDcmFileFormat(filePaths.at(thumbnailIndex)));
-        if (!fileFormat) {
-            qWarning() << "Ошибка загрузки DCM-файла!";
-            return;
-        }
+        ImageType::Pointer ITKImageWindowFilter = ImageUtils::ApplyWindowLevelITK(originalITKImage, windowWidth, windowCenter);
 
-        QScopedPointer<DicomImage> dicomImage(ImageUtils::getDicomImageFromDcmFileFormat(fileFormat.data()));
-        if (!dicomImage || dicomImage->getStatus() != EIS_Normal) {
-            qWarning() << "Ошибка обработки DICOM-изображения!";
-            return;
-        }
+        QScopedPointer<DicomImage> dcmImageThumbnail(
+            ImageUtils::ConvertITKSliceToDicomImage(ITKImageWindowFilter)
+            );
 
-        // Конвертация в QImage
-        thumbnail = ImageUtils::dicomImageToQImage(dicomImage.data(), static_cast<Uint16>(bitsAllocated));
-
-    } catch (const std::exception& e) {
-        qCritical() << "DataDICOM::generateThumbnail: Exception occurred:" << e.what();
-    } catch (...) {
-        qCritical() << "DataDICOM::generateThumbnail: Unknown exception occurred!";
+        thumbnail = ImageUtils::dicomImageToQImage(dcmImageThumbnail.data(), static_cast<Uint16>(bitsAllocated));
     }
 }

@@ -8,20 +8,16 @@
 
 #include <dcmtk/dcmdata/dctk.h>
 #include <dcmtk/dcmimgle/dcmimage.h>
+#include <dcmtk/dcmdata/dcdeftag.h>
+#include <itkImageRegionConstIterator.h>
 
 #include <itkMetaDataObject.h>
 #include <itkImage.h>
 #include <itkGDCMImageIO.h>
 #include <itkImageFileReader.h>
 #include <itkMatrix.h>
-#include <itkMetaDataObject.h>
 #include <itkFlipImageFilter.h>
 #include <itkImportImageFilter.h>
-
-
-
-
-
 
 
 
@@ -47,4 +43,11 @@ public:
     static itk::Image<float, 3>::Pointer correctImageOrientation(itk::Image<float, 3>::Pointer image);
 
     static itk::Image<float, 3>::Pointer ConvertQImageToITKImage(const QImage &qImage);
+
+
+    static itk::Image<float, 3>::Pointer ApplyWindowLevelITK(itk::Image<float, 3>::Pointer image, double window, double level);
+
+    static DicomImage* ConvertITKSliceToDicomImage(itk::Image<float, 3>::Pointer itkImageSlice);
+
+
 };

@@ -2,6 +2,105 @@
 
 
 
+
+
+#include <itkIntensityWindowingImageFilter.h>
+
+itk::Image<float, 3>::Pointer ImageUtils::ApplyWindowLevelITK(
+    itk::Image<float, 3>::Pointer image,
+    double window,
+    double level)
+{
+    using WindowingFilter = itk::IntensityWindowingImageFilter<itk::Image<float, 3>, itk::Image<float, 3>>;
+
+    auto windowingFilter = WindowingFilter::New();
+    windowingFilter->SetInput(image);
+    windowingFilter->SetWindowLevel(window, level);
+    windowingFilter->SetOutputMinimum(0.0f);
+    windowingFilter->SetOutputMaximum(255.0f);
+
+    try {
+        windowingFilter->Update();
+        return windowingFilter->GetOutput();
+    } catch (itk::ExceptionObject& ex) {
+        std::cerr << "Error applying window/level: " << ex << std::endl;
+        return nullptr;
+    }
+}
+
+
+
+DicomImage* ImageUtils::ConvertITKSliceToDicomImage(itk::Image<float, 3>::Pointer itkImageSlice) {
+    // 1. Проверка входных данных
+    if (itkImageSlice.IsNull()) {
+        std::cerr << "Error: Input image is null" << std::endl;
+        return nullptr;
+    }
+
+    // 2. Проверяем что это действительно срез (Z=1)
+    const auto size = itkImageSlice->GetLargestPossibleRegion().GetSize();
+    if (size[2] != 1) {
+        std::cerr << "Error: Expected single slice (Z size should be 1)" << std::endl;
+        return nullptr;
+    }
+
+    // 3. Подготовка DICOM-датасета
+    DcmDataset dataset;
+
+    // 4. Установка обязательных DICOM-тегов
+    const int width = size[0];
+    const int height = size[1];
+
+    dataset.putAndInsertUint16(DCM_SamplesPerPixel, 1);
+    dataset.putAndInsertUint16(DCM_Columns, width);
+    dataset.putAndInsertUint16(DCM_Rows, height);
+    dataset.putAndInsertUint16(DCM_BitsAllocated, 16);
+    dataset.putAndInsertUint16(DCM_BitsStored, 16);
+    dataset.putAndInsertUint16(DCM_HighBit, 15);
+    dataset.putAndInsertUint16(DCM_PixelRepresentation, 0); // Unsigned
+    dataset.putAndInsertString(DCM_PhotometricInterpretation, "MONOCHROME2");
+
+    // 5. Конвертация данных в 16-битный формат
+    std::vector<Uint16> pixelData(width * height);
+    itk::ImageRegionConstIterator<itk::Image<float, 3>> it(itkImageSlice, itkImageSlice->GetLargestPossibleRegion());
+
+    // Находим диапазон значений для нормализации
+    float minVal = itk::NumericTraits<float>::max();
+    float maxVal = itk::NumericTraits<float>::min();
+
+    for (it.GoToBegin(); !it.IsAtEnd(); ++it) {
+        const float val = it.Get();
+        if (val < minVal) minVal = val;
+        if (val > maxVal) maxVal = val;
+    }
+
+    const float range = maxVal - minVal;
+    it.GoToBegin();
+
+    for (size_t i = 0; !it.IsAtEnd(); ++it, ++i) {
+        const float normalized = (it.Get() - minVal) / range;
+        pixelData[i] = static_cast<Uint16>(normalized * 65535.0f);
+    }
+
+    // 6. Добавляем пиксельные данные
+    dataset.putAndInsertUint16Array(DCM_PixelData, pixelData.data(), pixelData.size());
+
+    // 7. Создаем DICOM изображение
+    DicomImage* dcmImage = new DicomImage(&dataset, EXS_LittleEndianExplicit);
+
+    if (dcmImage->getStatus() != EIS_Normal) {
+        delete dcmImage;
+        std::cerr << "Error creating DICOM image" << std::endl;
+        return nullptr;
+    }
+
+    return dcmImage;
+}
+
+
+
+
+
 QImage ImageUtils::loadDicomFileToQImageUseDCMTK(const QString &filePath) {
     QImage image;
 
@@ -46,6 +145,23 @@ QImage ImageUtils::loadDicomFileToQImageUseDCMTK(const QString &filePath) {
 
     return image;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 QImage ImageUtils::dicomImageToQImage(DicomImage* dicomImage, Uint16 bitsAllocated) {
@@ -245,7 +361,7 @@ bool isApproximatelyEqual(const itk::Matrix<double, 3, 3>& mat1, const itk::Matr
     return true;
 }
 
-
+/*
 QString ImageUtils::getOrientationFromDirection(const itk::Matrix<double, 3, 3>& direction) {
     itk::Matrix<double, 3, 3> axial, coronal, sagittal;
     axial.SetIdentity();
@@ -264,9 +380,9 @@ QString ImageUtils::getOrientationFromDirection(const itk::Matrix<double, 3, 3>&
 
     return "НЕСТАНДАРТНАЯ";
 }
+*/
 
-
-
+/*
 itk::Image<float, 3>::Pointer ImageUtils::correctImageOrientation(itk::Image<float, 3>::Pointer image) {
     using FlipFilterType = itk::FlipImageFilter<itk::Image<float, 3>>;
     auto flipFilter = FlipFilterType::New();
@@ -282,7 +398,7 @@ itk::Image<float, 3>::Pointer ImageUtils::correctImageOrientation(itk::Image<flo
 
     return flipFilter->GetOutput();
 }
-
+*/
 
 #include <stdexcept>
 

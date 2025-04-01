@@ -119,7 +119,7 @@ class MainWindow : public QMainWindow
     QString currentLanguage;
 
     QWidget *centralWidget;
-    QWidget * ScreenSaverCentralWidget;
+    QVTKOpenGLNativeWidget* screenSaverCentralWidget;
 
     QMenuBar* pMenuBar;
 

@@ -44,6 +44,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         LanguagePacksApp.qrc
         imageutils.h imageutils.cpp
         datadicom.h datadicom.cpp
+        vtkpipelineviewer.h vtkpipelineviewer.cpp
 
 
 
