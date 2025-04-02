@@ -59,41 +59,7 @@
 #include "gallery.h"
 #include "imageutils.h"
 #include "datadicom.h"
-
-
-struct ProjectionView {
-    QVTKOpenGLNativeWidget* vtkWidget;
-    vtkSmartPointer<vtkImageViewer2> imageViewer;
-    vtkSmartPointer<vtkGenericOpenGLRenderWindow> renderWindow;
-    vtkSmartPointer<vtkRenderWindowInteractor> interactor;
-    vtkSmartPointer<CustomInteractorStyle2D> interactorStyle;
-    vtkSmartPointer<vtkImageMapToWindowLevelColors> windowLevelFilter;
-    vtkSmartPointer<vtkImageFlip> flipFilter;
-
-    int sliceOrientation = vtkImageViewer2::SLICE_ORIENTATION_XY;
-
-    ProjectionView(QWidget* parent = nullptr) :
-        vtkWidget(new QVTKOpenGLNativeWidget(parent)) {}
-
-
-    void setWindowLevel(double window, double level) {
-        if (windowLevelFilter) {
-            windowLevelFilter->SetWindow(window);
-            windowLevelFilter->SetLevel(level);
-            windowLevelFilter->Update();
-            imageViewer->Render();
-        }
-    }
-
-    void flipImage(int axis) {
-        if (flipFilter) {
-            flipFilter->SetFilteredAxis(axis);
-            flipFilter->Update();
-            imageViewer->Render();
-        }
-    }
-
-};
+#include "vtkpipelineviewer.h"
 
 
 
@@ -102,10 +68,8 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
     bool MPR = true;
+    QVector<QSharedPointer<VTKPipelineViewer>> vtkViewers;
 
-    ProjectionView projectionViewAxial;
-    ProjectionView projectionViewSagital;
-    ProjectionView projectionViewFrontal;
     QGridLayout *gridLayoutCentralWidget;
 
     QSharedPointer<DataDICOM> currentData;
@@ -155,11 +119,6 @@ class MainWindow : public QMainWindow
 private slots:
     void openFolder();
     void openFile();
-
-    void initializeVTKImageViewer(
-        const QSharedPointer<DataDICOM>& data,
-        ProjectionView &projectionView);
-
     void loadDicomFromFile(const QString &filePath);
     void loadDicomFromDirectory(const QString &folderPath);
     void saveSettings();
@@ -182,29 +141,15 @@ private slots:
     void setDefaultSettings();
 
     void onThumbnailClicked(const QString &seriesUID);
-
-
-
-
-
-
-
-
-
-
+    void onThumbnailDoubleClicked(const QString &seriesUID);
 
 protected:
     void closeEvent(QCloseEvent* event) override;
     void showEvent(QShowEvent *event) override;
 
-
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-
-
-
-
 
 };
 

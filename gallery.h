@@ -32,6 +32,7 @@ public:
 signals:
     // Сигнал, который будет отправляться при выборе миниатюры
     void thumbnailClicked(const QString &seriesUID);
+    void thumbnailDoubleClicked(const QString &seriesUID);
 
 private:
     QListWidget *thumbnailList; // Список миниатюр

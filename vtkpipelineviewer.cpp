@@ -5,18 +5,6 @@
 VTKPipelineViewer::VTKPipelineViewer(QWidget* parent)
     : QWidget(parent), vtkWidget(new QVTKOpenGLNativeWidget(this)) {
 
-    qDebug() << "VTKPipelineViewer::VTKPipelineViewer: Создание объекта";
-
-    // Инициализация VTK компонентов
-    renderWindow = vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New();
-    vtkWidget->setRenderWindow(renderWindow);
-
-    imageViewer = vtkSmartPointer<vtkImageViewer2>::New();
-    imageViewer->SetRenderWindow(renderWindow);
-
-    interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
-    renderWindow->SetInteractor(interactor);
-
     qDebug() << "VTKPipelineViewer::VTKPipelineViewer: Объект успешно создан";
 }
 
@@ -39,6 +27,18 @@ void VTKPipelineViewer::setInteractorStyle(vtkSmartPointer<vtkInteractorStyleIma
 void VTKPipelineViewer::initializePipeline(const QSharedPointer<DataDICOM>& data) {
     qDebug() << "VTKPipelineViewer::initializePipeline: Инициализация пайплайна";
 
+    // Инициализация VTK компонентов
+    renderWindow = vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New();
+    vtkWidget->setRenderWindow(renderWindow);
+
+    // Очистка предыдущего рендера
+    if (imageViewer) {
+        imageViewer->GetRenderWindow()->RemoveRenderer(imageViewer->GetRenderer());
+        renderWindow->Finalize();
+    }
+    imageViewer = vtkSmartPointer<vtkImageViewer2>::New();
+    imageViewer->SetRenderWindow(renderWindow);
+
     // Получаем исходное VTK изображение (предполагается потокобезопасность внутри DataDICOM)
     inputImage = data->getVTKImage();
     if (!inputImage) {
@@ -51,6 +51,9 @@ void VTKPipelineViewer::initializePipeline(const QSharedPointer<DataDICOM>& data
 
     // Перестраиваем пайплайн с учетом списка фильтров
     rebuildPipeline();
+
+    interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
+    renderWindow->SetInteractor(interactor);
 
     // Инициализация интерактора и рендера
     interactor->Initialize();

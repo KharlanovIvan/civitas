@@ -45,6 +45,10 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         imageutils.h imageutils.cpp
         datadicom.h datadicom.cpp
         vtkpipelineviewer.h vtkpipelineviewer.cpp
+        IModalityInitializer.h
+        ctinitializer.h ctinitializer.cpp
+        mrinitializer.h mrinitializer.cpp
+        modalityinitializerfactory.h modalityinitializerfactory.cpp
 
 
 

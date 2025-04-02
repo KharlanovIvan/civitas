@@ -4,6 +4,7 @@
 #include <QDebug>
 
 
+
 // VTK-заголовки
 #include <QVTKOpenGLNativeWidget.h>
 #include <vtkSmartPointer.h>
@@ -19,6 +20,7 @@
 
 #include "CustomInteractorStyle2D.h"
 #include "DataDICOM.h"
+
 
 
 

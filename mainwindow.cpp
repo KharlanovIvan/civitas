@@ -3,17 +3,9 @@
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
-
-
-
-
-
-
-
     screenSaverCentralWidget = new QVTKOpenGLNativeWidget;
 
     setCentralWidget(screenSaverCentralWidget);
-
 
     // Создание интерфейса
     setupUI();
@@ -72,6 +64,7 @@ void MainWindow::initGallery() {
     });
 
     connect(gallery, &Gallery::thumbnailClicked, this, &MainWindow::onThumbnailClicked);
+    connect(gallery, &Gallery::thumbnailDoubleClicked, this, &MainWindow::onThumbnailDoubleClicked);
 
     gallery->hide();
 }
@@ -178,7 +171,243 @@ void MainWindow::updateUI() {
     }
 }
 
+
+void MainWindow::onThumbnailDoubleClicked(const QString &seriesUID) {
+    qDebug() << "Двойной щелчок на серии с UID:" << seriesUID;
+
+    if(gridLayoutCentralWidget) {
+        // Очистка лейаута перед добавлением новых виджетов
+        QLayoutItem* item;
+        while ((item = gridLayoutCentralWidget->takeAt(0)) != nullptr) {
+            // Удаляем виджет из элемента лейаута
+            if (QWidget* widget = item->widget()) {
+                widget->deleteLater(); // Безопасное удаление виджета
+            }
+            // Удаляем сам элемент лейаута
+            delete item;
+        }
+
+        delete gridLayoutCentralWidget;
+        gridLayoutCentralWidget = nullptr; // Обнуляем указатель
+        vtkViewers.clear();
+    }
+
+    setCentralWidget(nullptr);
+
+    if (DICOMSeries.contains(seriesUID)) {
+        currentData = DICOMSeries[seriesUID];
+
+        if (currentData->convertITKtoVTK()) {
+
+            if (MPR && currentData->getVTKImage()->GetDimensions()[2] > 1) {
+
+                centralWidget = new QWidget(this);
+
+                setCentralWidget(centralWidget);
+                gridLayoutCentralWidget = new QGridLayout();
+                centralWidget->setLayout(gridLayoutCentralWidget);
+
+
+                QSharedPointer<VTKPipelineViewer> projectionViewAxial(new VTKPipelineViewer(this));
+                vtkViewers.append(projectionViewAxial);
+                QSharedPointer<VTKPipelineViewer> projectionViewSagital(new VTKPipelineViewer(this));
+                vtkViewers.append(projectionViewSagital);
+                QSharedPointer<VTKPipelineViewer> projectionViewFrontal(new VTKPipelineViewer(this));
+                vtkViewers.append(projectionViewFrontal);
+
+                // Добавляем виджеты в макет
+                gridLayoutCentralWidget->addWidget(projectionViewAxial->getVTKWidget(), 0, 0, 2, 1);
+                gridLayoutCentralWidget->addWidget(projectionViewSagital->getVTKWidget(), 0, 1);
+                gridLayoutCentralWidget->addWidget(projectionViewFrontal->getVTKWidget(), 1, 1);
+
+                // Растяжение колонок
+                gridLayoutCentralWidget->setColumnStretch(0, 2);
+                gridLayoutCentralWidget->setColumnStretch(1, 1);
+
+                QTimer::singleShot(0, this, [this, projectionViewAxial]() { projectionViewAxial->initializePipeline(this->currentData); });
+                QTimer::singleShot(0, this, [this, projectionViewSagital]() { projectionViewSagital->initializePipeline(this->currentData); });
+                QTimer::singleShot(0, this, [this, projectionViewFrontal]() { projectionViewFrontal->initializePipeline(this->currentData); });
+
+
+            } else {
+                // Создаем объект VTKPipelineViewer
+                QSharedPointer<VTKPipelineViewer> projectionViewAxial(new VTKPipelineViewer(this));
+                vtkViewers.append(projectionViewAxial);
+                // Устанавливаем его как центральный виджет
+                setCentralWidget(projectionViewAxial->getVTKWidget());
+
+                // Инициализация пайплайна после того, как виджет интегрирован
+                QTimer::singleShot(0, this, [projectionViewAxial, this]() {
+                    projectionViewAxial->initializePipeline(currentData);
+                });
+            }
+
+        } else {
+            qDebug() << "MainWindow::openFolder: Ошибка инициализации компонентов отображения VTK виджета!";
+        }
+
+    }
+
+}
+
+
 void MainWindow::onThumbnailClicked(const QString &seriesUID) {
+    qDebug() << "Щелчок на серии с UID:" << seriesUID;
+}
+
+
+void MainWindow::openFile() {
+    QString filePath = QFileDialog::getOpenFileName(
+        nullptr,
+        "Выберите файл",
+        QDir::homePath(),
+        "DICOM Files (*.dcm *.DCM *);;All Files (*)"
+        );
+
+    if (!filePath.isEmpty()) {
+        qDebug() << "MainWindow::openFile: Выбран файл:" << filePath;
+        if (!DICOMSeries.isEmpty()) {
+            DICOMSeries.clear();
+        }
+
+        try {
+            loadDicomFromFile(filePath);
+            if (currentData->convertITKtoVTK()) {
+                // Создаем объект VTKPipelineViewer
+                QSharedPointer<VTKPipelineViewer> projectionViewAxial(new VTKPipelineViewer(this));
+                vtkViewers.append(projectionViewAxial);
+                // Устанавливаем его как центральный виджет
+                setCentralWidget(projectionViewAxial->getVTKWidget());
+
+                // Инициализация пайплайна после того, как виджет интегрирован
+                QTimer::singleShot(0, this, [projectionViewAxial, this]() {
+                    projectionViewAxial->initializePipeline(currentData);
+                });
+            } else {
+                qDebug() << "MainWindow::openFile: Ошибка инициализации компонентов отображения VTK виджета!";
+            }
+        } catch (const itk::ExceptionObject &e) {
+            qDebug() << "MainWindow::openFile: Ошибка ITK: " << e.what();
+        } catch (const std::exception &e) {
+            qDebug() << "MainWindow::openFile: Неожиданная ошибка: " << e.what();
+        }
+    } else {
+        qDebug() << "MainWindow::openFile: Выбор файла отменен.";
+        return;
+    }
+}
+
+
+void MainWindow::openFolder() {
+
+    QString folderPath = QFileDialog::getExistingDirectory(
+        nullptr,
+        "Выберите папку",
+        QDir::homePath(),
+        QFileDialog::ShowDirsOnly
+        );
+
+    if (!folderPath.isEmpty()) {
+        qDebug() << "Выбрана папка:" << folderPath;
+
+        if (!DICOMSeries.isEmpty()) {
+            DICOMSeries.clear();
+        }
+
+
+        try {
+            loadDicomFromDirectory(folderPath);
+
+            if (currentData->convertITKtoVTK()) {
+
+                if (MPR && currentData->getVTKImage()->GetDimensions()[2] > 1) {
+
+                    centralWidget = new QWidget(this);
+
+                    setCentralWidget(centralWidget);
+                    gridLayoutCentralWidget = new QGridLayout();
+                    centralWidget->setLayout(gridLayoutCentralWidget);
+
+
+                    QSharedPointer<VTKPipelineViewer> projectionViewAxial(new VTKPipelineViewer(this));
+                    vtkViewers.append(projectionViewAxial);
+                    QSharedPointer<VTKPipelineViewer> projectionViewSagital(new VTKPipelineViewer(this));
+                    vtkViewers.append(projectionViewSagital);
+                    QSharedPointer<VTKPipelineViewer> projectionViewFrontal(new VTKPipelineViewer(this));
+                    vtkViewers.append(projectionViewFrontal);
+
+                    // Добавляем виджеты в макет
+                    gridLayoutCentralWidget->addWidget(projectionViewAxial->getVTKWidget(), 0, 0, 2, 1);
+                    gridLayoutCentralWidget->addWidget(projectionViewSagital->getVTKWidget(), 0, 1);
+                    gridLayoutCentralWidget->addWidget(projectionViewFrontal->getVTKWidget(), 1, 1);
+
+                    // Растяжение колонок
+                    gridLayoutCentralWidget->setColumnStretch(0, 2);
+                    gridLayoutCentralWidget->setColumnStretch(1, 1);
+
+                    QTimer::singleShot(0, this, [this, projectionViewAxial]() { projectionViewAxial->initializePipeline(this->currentData); });
+                    QTimer::singleShot(0, this, [this, projectionViewSagital]() { projectionViewSagital->initializePipeline(this->currentData); });
+                    QTimer::singleShot(0, this, [this, projectionViewFrontal]() { projectionViewFrontal->initializePipeline(this->currentData); });
+
+
+                } else {
+                    // Создаем объект VTKPipelineViewer
+                    QSharedPointer<VTKPipelineViewer> projectionViewAxial(new VTKPipelineViewer(this));
+                    vtkViewers.append(projectionViewAxial);
+                    // Устанавливаем его как центральный виджет
+                    setCentralWidget(projectionViewAxial->getVTKWidget());
+
+                    // Инициализация пайплайна после того, как виджет интегрирован
+                    QTimer::singleShot(0, this, [projectionViewAxial, this]() {
+                        projectionViewAxial->initializePipeline(currentData);
+                    });
+                }
+
+            } else {
+                qDebug() << "MainWindow::openFolder: Ошибка инициализации компонентов отображения VTK виджета!";
+            }
+
+        } catch (const itk::ExceptionObject &e) {
+            qDebug() << "Ошибка ITK: " << e.what();
+        } catch (const std::exception &e) {
+            qDebug() << "Неожиданная ошибка: " << e.what();
+        }
+    } else {
+        qDebug() << "Выбор папки отменен.";
+        return;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+void MainWindow::onThumbnailDoubleClicked(const QString &seriesUID) {
+    qDebug() << "Двойной щелчок на серии с UID:" << seriesUID;
+
+}
+
+void MainWindow::onThumbnailClicked(const QString &seriesUID) {
+     qDebug() << "Щелчок на серии с UID:" << seriesUID;
 
     if(gridLayoutCentralWidget) {
         // Очистка лейаута перед добавлением новых виджетов
@@ -359,6 +588,9 @@ void MainWindow::openFolder() {
         return;
     }
 }
+
+*/
+
 
 
 
@@ -607,88 +839,6 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
 
 
 
-
-void MainWindow::initializeVTKImageViewer(
-    const QSharedPointer<DataDICOM>& data,
-    ProjectionView &projectionView) {
-    qDebug() << "void MainWindow::initializeVTKImageViewer - start";
-
-   projectionView.renderWindow = vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New();
-    // Очистка предыдущего рендера
-    if (projectionView.imageViewer) {
-        projectionView.imageViewer->GetRenderWindow()->RemoveRenderer(projectionView.imageViewer->GetRenderer());
-        projectionView.renderWindow->Finalize();
-    }
-    qDebug() << "void MainWindow::initializeVTKImageViewer: Очистка предыдущего рендера выполнена, инициализация нового...";
-    // Инициализация нового
-    projectionView.imageViewer = vtkSmartPointer<vtkImageViewer2>::New();
-    projectionView.vtkWidget->setRenderWindow(projectionView.renderWindow);
-
-    qDebug() << "void MainWindow::initializeVTKImageViewer: Получаем VTK изображение (потокобезопасно)...";
-    // Получаем VTK изображение (потокобезопасно)
-
-    qDebug() << "void MainWindow::initializeVTKImageViewer: Настройка фильтров (уникальные для каждого вида)...";
-    // Настройка фильтров (уникальные для каждого вида)
-    if (!projectionView.windowLevelFilter) {
-        projectionView.windowLevelFilter = vtkSmartPointer<vtkImageMapToWindowLevelColors>::New();
-    }
-    projectionView.windowLevelFilter->SetInputData(data->getVTKImage());
-    projectionView.windowLevelFilter->SetWindow(data->getWindowWidth());
-    projectionView.windowLevelFilter->SetLevel(data->getWindowCenter());
-
-
-    qDebug() << "void MainWindow::initializeVTKImageViewer: flipFilter...";
-    if (!projectionView.flipFilter) {
-        projectionView.flipFilter = vtkSmartPointer<vtkImageFlip>::New();
-    }
-    projectionView.flipFilter->SetInputConnection(projectionView.windowLevelFilter->GetOutputPort());
-    projectionView.flipFilter->SetFilteredAxis(1);
-
-
-    qDebug() << "void MainWindow::initializeVTKImageViewer: Настройка imageViewer...";
-    // Настройка imageViewer
-    projectionView.imageViewer->SetInputConnection(projectionView.flipFilter->GetOutputPort());
-    projectionView.imageViewer->SetRenderWindow(projectionView.renderWindow);
-
-    // Ориентация среза
-    switch (projectionView.sliceOrientation) {
-    case vtkImageViewer2::SLICE_ORIENTATION_XY:
-        projectionView.imageViewer->SetSliceOrientationToXY();
-        break;
-    case vtkImageViewer2::SLICE_ORIENTATION_XZ:
-        projectionView.imageViewer->SetSliceOrientationToXZ();
-        break;
-    case vtkImageViewer2::SLICE_ORIENTATION_YZ:
-        projectionView.imageViewer->SetSliceOrientationToYZ();
-        break;
-    default:
-        qDebug() << "Неизвестная ориентация, установлена XY.";
-        projectionView.imageViewer->SetSliceOrientationToXY();
-        break;
-    }
-
-    qDebug() << "void MainWindow::initializeVTKImageViewer: Настройка интерактора...";
-    // Настройка интерактора
-    if (!projectionView.interactor) {
-        projectionView.interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
-    }
-    projectionView.interactor->SetRenderWindow(projectionView.renderWindow);
-
-    qDebug() << "void MainWindow::initializeVTKImageViewer: Создание стиля интерактора...";
-    if (!projectionView.interactorStyle) {
-        projectionView.interactorStyle = vtkSmartPointer<CustomInteractorStyle2D>::New();
-    }
-    projectionView.interactorStyle->SetImageViewer(projectionView.imageViewer);
-    projectionView.interactor->SetInteractorStyle(projectionView.interactorStyle);
-    projectionView.interactorStyle->EnableScrolling(true);
-
-
-    qDebug() << "void MainWindow::initializeVTKImageViewer: Инициализация интерактора...";
-    projectionView.interactor->Initialize();
-    qDebug() << "void MainWindow::initializeVTKImageViewer: Инициализация рендера imageViewer...";
-    projectionView.imageViewer->Render();
-    qDebug() << "void MainWindow::initializeVTKImageViewer - finish";
-}
 
 
 

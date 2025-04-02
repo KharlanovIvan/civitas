@@ -19,7 +19,7 @@ Gallery::Gallery(QWidget *parent) : QDockWidget(parent) {
         // Устанавливаем thumbnailList как виджет для доквиджета
         setWidget(thumbnailList);
 
-        // Восстанавливаем коннектор
+
         connect(thumbnailList, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
             try {
                 if (!item) {
@@ -32,6 +32,23 @@ Gallery::Gallery(QWidget *parent) : QDockWidget(parent) {
                 qCritical() << "Исключение в itemClicked: " << e.what();
             }
         });
+
+
+        connect(thumbnailList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
+            try {
+                if (!item) {
+                    qWarning() << "Ошибка: itemDoubleClicked получен nullptr";
+                    return;
+                }
+                QString seriesUID = item->data(Qt::UserRole).toString();
+                emit thumbnailDoubleClicked(seriesUID); // Отправляем сигнал с UID выбранной миниатюры при двойном щелчке
+            } catch (const std::exception &e) {
+                qCritical() << "Исключение в itemDoubleClicked: " << e.what();
+            }
+        });
+
+
+
     } catch (const std::exception &e) {
         qCritical() << "Ошибка в конструкторе Gallery: " << e.what();
     }
