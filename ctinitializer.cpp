@@ -1,16 +1,23 @@
 #include "ctinitializer.h"
 
-    void CTInitializer::initializePipeline(VTKPipelineViewer* viewer, const QSharedPointer<DataDICOM>& data) {
+    void CTInitializer::initializePipeline(QSharedPointer<VTKPipelineViewer> viewer, const QSharedPointer<DataDICOM>& data) {
         qDebug() << "CTInitializer: Инициализация пайплайна для CT";
-        // Здесь можно задать базовые фильтры, окно/уровень и прочее для CT
-        // Например:
-        // viewer->setWindowLevel(400, 40);
-        // viewer->addFilterToFront("CT_Sharpen", someCTSpecificFilter);
-        //viewer->initializePipeline(data);  // базовая инициализация
+
+        viewer->initializePipeline(data);
+
+        // Настройка фильтров
+
+        viewer->setFlipFilter(1);
+
+        viewer->setWindowLevelFilter(data->getWindowWidth(), data->getWindowCenter());
+
+
     }
 
     void CTInitializer::initializeUI(MainWindow* mainWindow) {
-        qDebug() << "CTInitializer: Инициализация UI для CT";
-        // Настраиваем меню, кнопки, панели инструментов для CT
-        // mainWindow->setupCTSpecificTools();
+        qDebug() << "CTInitializer: Инициализация UI для CT:";
+
+        qDebug() << "\tИнициализация базовых инструментов КТ...";
+        // Инициализация базовых инструментов КТ
+        mainWindow->initCTBasicToolbar();
     }

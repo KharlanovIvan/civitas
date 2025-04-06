@@ -3,8 +3,6 @@
 #include <QWidget>
 #include <QDebug>
 
-
-
 // VTK-заголовки
 #include <QVTKOpenGLNativeWidget.h>
 #include <vtkSmartPointer.h>
@@ -13,15 +11,13 @@
 #include <vtkRenderWindowInteractor.h>
 #include <vtkImageData.h>
 #include <vtkImageAlgorithm.h>
+#include <vtkInteractorStyleImage.h>
 
-// Необходимые фильтры (пример: window/level, flip)
+
 #include <vtkImageMapToWindowLevelColors.h>
 #include <vtkImageFlip.h>
 
-#include "CustomInteractorStyle2D.h"
 #include "DataDICOM.h"
-
-
 
 
 class VTKPipelineViewer : public QWidget {
@@ -43,6 +39,7 @@ public:
 
     // Методы управления фильтрами
     // Добавление фильтра
+    void addFilter(const QString& name, vtkSmartPointer<vtkImageAlgorithm> filter);
     void addFilterToEnd(const QString& filterName, vtkSmartPointer<vtkImageAlgorithm> filter);
     void addFilterToFront(const QString& filterName, vtkSmartPointer<vtkImageAlgorithm> filter);
     void addFilterBefore(const QString& existingFilterName, const QString& newFilterName, vtkSmartPointer<vtkImageAlgorithm> newFilter);
@@ -74,6 +71,10 @@ public:
 
     void setSliceOrientation(int sliceOrientation);
     int getSliceOrientation() { return sliceOrientation; }
+
+    void setWindowLevelFilter(double window, double level);
+
+    void setFlipFilter(int flip);
 
 
 private:

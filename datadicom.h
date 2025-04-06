@@ -1,4 +1,6 @@
 #pragma once
+#ifndef DATADICOM_H
+#define DATADICOM_H
 
 #include <QObject>
 #include <QImage>
@@ -21,6 +23,9 @@
 
 #include "imageutils.h"
 
+
+
+
 class DataDICOM : public QObject {
     Q_OBJECT
 
@@ -40,6 +45,9 @@ public:
     QString getSeriesUID() const;
     void setSeriesUID(const QString& uid);
 
+    QString getModality() const;
+    void setModality(const QString& modality);
+
     QStringList getFilePaths() const;
     void addFilePath(const QString &filePath);
 
@@ -55,11 +63,10 @@ public:
     itk::MetaDataDictionary getMetaData() const;
     void setMetadata(itk::MetaDataDictionary metaData);
 
-    bool convertITKtoVTK();
+   // bool convertITKtoVTK();
 
     vtkSmartPointer<vtkImageData> getDeepCopyVTKImage();
 
-    bool isVTKImageReady() const;
 
 private:
     mutable QMutex vtkImageMutex;  // Мьютекс для защиты данных
@@ -70,6 +77,7 @@ private:
     double windowWidth = 400;
     double windowCenter = 50;
 
+    QString modality;
 
     QImage thumbnail;  // Миниатюра серии
 
@@ -80,5 +88,6 @@ private:
     ImageType::Pointer ITKImage;
     vtkSmartPointer<vtkImageData> VTKImage;
 
-    bool vtkImageReady = false; // Флаг готовности VTK данных
 };
+
+#endif // DATADICOM_H

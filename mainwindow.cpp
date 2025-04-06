@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "IModalityInitializer.h"
 
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
@@ -19,26 +20,76 @@ MainWindow::~MainWindow() {}
 
 void MainWindow::setupUI() {
 
-    // Инициализация галереи
-    initGallery();
+    qDebug() << "Установка элементов интерфейса: ";
 
     // Создание меню "Файл"
+    qDebug() << "Создание меню 'Файл'...";
     initFileMenu();
 
+    qDebug() << "Создание меню 'Правка'...";
     // Создание меню "Правка"
     initEditMenu();
 
+     qDebug() << "Создание меню 'Вид'...";
     // Создание меню "Вид"
     initViewMenu();
 
+     qDebug() << "Создание меню 'Настройки'...";
     // Создание меню "Настройки"
     initSettingsMenu();
 
+     qDebug() << "Создание меню 'Справка'...";
     // Создание меню "Справка"
     initHelpMenu();
 
+    qDebug() << "Добавление всех меню в меню-бар...";
     // Добавление всех меню в меню-бар
     setupMenuBar();
+
+    qDebug() << "Инициализация галереи...";
+    // Инициализация галереи
+    initGallery();
+
+}
+
+
+void MainWindow::initCTBasicToolbar() {
+    // Создаем галерею и добавляем её в док-область справа
+    CTBasicToolbarPanel = QSharedPointer<CTBasicToolbar>::create(this);
+
+    CTBasicToolbarPanel->setWindowTitle(tr("Базовые инструменты KT"));
+
+    addDockWidget(Qt::LeftDockWidgetArea, CTBasicToolbarPanel.data());
+    CTBasicToolbarPanel->applySizeConstraints();
+
+
+
+
+    // Настройка видимости галереи через меню "Вид"
+    pActCTBasicToolbarPanel = new QAction(tr("&Базовые инструменты KT"));
+    pActCTBasicToolbarPanel->setCheckable(true);
+    pActCTBasicToolbarPanel->setChecked(CTBasicToolbarPanel->isVisible());
+
+    pSetPanel->addAction(pActCTBasicToolbarPanel); // Добавляем действие для галереи
+
+    // Подключаем сигналы для управления видимостью галереи
+    connect(pActCTBasicToolbarPanel, &QAction::toggled, this, [this](bool checked) {
+        if (checked) {
+            CTBasicToolbarPanel->show();
+        } else {
+            CTBasicToolbarPanel->hide();
+        }
+    });
+
+    // Подключаем сигнал для отслеживания видимости панели
+    connect(CTBasicToolbarPanel.data(), &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (!visible) {
+            pActCTBasicToolbarPanel->setChecked(false);  // Когда панель скрыта, снимаем галочку
+        } else {
+            pActCTBasicToolbarPanel->setChecked(true);  // Когда панель видна, устанавливаем галочку
+        }
+    });
+
 }
 
 
@@ -52,6 +103,8 @@ void MainWindow::initGallery() {
     pActGalleryPanel->setCheckable(true);
     pActGalleryPanel->setChecked(gallery->isVisible());
 
+    pSetPanel->addAction(pActGalleryPanel); // Добавляем действие для галереи
+
     // Подключаем сигналы для управления видимостью галереи
     connect(pActGalleryPanel, &QAction::toggled, this, [this](bool checked) {
         checked ? gallery->show() : gallery->hide();
@@ -60,13 +113,14 @@ void MainWindow::initGallery() {
     connect(gallery, &QDockWidget::visibilityChanged, this, [this](bool visible) {
         if (!visible) {
             pActGalleryPanel->setChecked(false);
+        } else {
+            pActGalleryPanel->setChecked(true);
         }
     });
 
     connect(gallery, &Gallery::thumbnailClicked, this, &MainWindow::onThumbnailClicked);
     connect(gallery, &Gallery::thumbnailDoubleClicked, this, &MainWindow::onThumbnailDoubleClicked);
 
-    gallery->hide();
 }
 
 void MainWindow::initFileMenu() {
@@ -100,7 +154,6 @@ void MainWindow::initViewMenu() {
 
     // Создаем подменю "Панели инструментов"
     pSetPanel = new QMenu(tr("&Панели инструментов"));
-    pSetPanel->addAction(pActGalleryPanel); // Добавляем действие для галереи
     pView->addMenu(pSetPanel);
 }
 
@@ -151,6 +204,8 @@ void MainWindow::setupMenuBar() {
 
 void MainWindow::updateUI() {
     // Обновление всех элементов UI
+    qDebug() << "Обновление всех элементов UI...";
+
     pFile->setTitle(tr("&Файл"));
     pEdit->setTitle(tr("&Правка"));
     pView->setTitle(tr("&Вид"));
@@ -163,7 +218,15 @@ void MainWindow::updateUI() {
     pActOpenFiles->setText(tr("Открыть серию"));
     pActExit->setText(tr("Выход"));
     pActGalleryPanel->setText(tr("&Галерея"));
+
     gallery->setWindowTitle(tr("Галерея"));
+
+    if (!CTBasicToolbarPanel.isNull()) {
+        CTBasicToolbarPanel->setWindowTitle(tr("Базовые инструменты KT"));
+    } else {
+        qDebug() << "CTBasicToolbarPanel не инициализирован!";
+    }
+
 
     // Устанавливаем галочку на текущий язык
     for (QAction *action : languageGroup->actions()) {
@@ -196,8 +259,6 @@ void MainWindow::onThumbnailDoubleClicked(const QString &seriesUID) {
 
     if (DICOMSeries.contains(seriesUID)) {
         currentData = DICOMSeries[seriesUID];
-
-        if (currentData->convertITKtoVTK()) {
 
             if (MPR && currentData->getVTKImage()->GetDimensions()[2] > 1) {
 
@@ -241,11 +302,6 @@ void MainWindow::onThumbnailDoubleClicked(const QString &seriesUID) {
                     projectionViewAxial->initializePipeline(currentData);
                 });
             }
-
-        } else {
-            qDebug() << "MainWindow::openFolder: Ошибка инициализации компонентов отображения VTK виджета!";
-        }
-
     }
 
 }
@@ -271,25 +327,40 @@ void MainWindow::openFile() {
         }
 
         try {
-            loadDicomFromFile(filePath);
-            if (currentData->convertITKtoVTK()) {
-                // Создаем объект VTKPipelineViewer
-                QSharedPointer<VTKPipelineViewer> projectionViewAxial(new VTKPipelineViewer(this));
-                vtkViewers.append(projectionViewAxial);
-                // Устанавливаем его как центральный виджет
-                setCentralWidget(projectionViewAxial->getVTKWidget());
 
-                // Инициализация пайплайна после того, как виджет интегрирован
-                QTimer::singleShot(0, this, [projectionViewAxial, this]() {
-                    projectionViewAxial->initializePipeline(currentData);
-                });
-            } else {
-                qDebug() << "MainWindow::openFile: Ошибка инициализации компонентов отображения VTK виджета!";
+            if (!loadDicomFromFile(filePath)) {
+                qDebug() << "MainWindow::openFile: не удалость открыть файл: " << filePath;
+                QMessageBox::critical(this, "Ошибка", QString("Не удалось открыть файл: \n%1").arg(filePath));
+                return;
             }
+                QString modality = currentData->getModality();
+                qDebug() << "Модальность: " << modality;
+
+                // Создаём объект VTKPipelineViewer
+                QSharedPointer<VTKPipelineViewer> viewer(new VTKPipelineViewer(this));
+                vtkViewers.append(viewer);
+                setCentralWidget(viewer->getVTKWidget());
+
+                // Создаём инициализатор через фабрику
+                QSharedPointer<IModalityInitializer>initializer(ModalityInitializerFactory::createInitializer(modality));
+                if (initializer) {
+                    // Инициализируем пайплайн и UI для данной модальности
+                    QTimer::singleShot(0, this, [=]() {
+                        initializer->initializePipeline(viewer, currentData);
+                        initializer->initializeUI(this);
+                    });
+                } else {
+                    qDebug() << "MainWindow::openFile: Неизвестная модальность. Используем стандартную инициализацию.";
+                    QTimer::singleShot(0, this, [=]() {
+                        viewer->initializePipeline(currentData);
+                    });
+                }
         } catch (const itk::ExceptionObject &e) {
             qDebug() << "MainWindow::openFile: Ошибка ITK: " << e.what();
+            QMessageBox::critical(this, "Ошибка", QString("Не удалось открыть файл: \n%1 \nОшибка ITK:%2").arg(filePath).arg(e.what()));
         } catch (const std::exception &e) {
-            qDebug() << "MainWindow::openFile: Неожиданная ошибка: " << e.what();
+            qDebug() << "MainWindow::openFile: Неизвестная ошибка: " << e.what();
+            QMessageBox::critical(this, "Ошибка", QString("Не удалось открыть файл: \n%1 \n Ошибка:%2").arg(filePath).arg(e.what()));
         }
     } else {
         qDebug() << "MainWindow::openFile: Выбор файла отменен.";
@@ -317,8 +388,6 @@ void MainWindow::openFolder() {
 
         try {
             loadDicomFromDirectory(folderPath);
-
-            if (currentData->convertITKtoVTK()) {
 
                 if (MPR && currentData->getVTKImage()->GetDimensions()[2] > 1) {
 
@@ -363,10 +432,6 @@ void MainWindow::openFolder() {
                     });
                 }
 
-            } else {
-                qDebug() << "MainWindow::openFolder: Ошибка инициализации компонентов отображения VTK виджета!";
-            }
-
         } catch (const itk::ExceptionObject &e) {
             qDebug() << "Ошибка ITK: " << e.what();
         } catch (const std::exception &e) {
@@ -377,225 +442,10 @@ void MainWindow::openFolder() {
         return;
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-void MainWindow::onThumbnailDoubleClicked(const QString &seriesUID) {
-    qDebug() << "Двойной щелчок на серии с UID:" << seriesUID;
-
-}
-
-void MainWindow::onThumbnailClicked(const QString &seriesUID) {
-     qDebug() << "Щелчок на серии с UID:" << seriesUID;
-
-    if(gridLayoutCentralWidget) {
-        // Очистка лейаута перед добавлением новых виджетов
-        QLayoutItem* item;
-        while ((item = gridLayoutCentralWidget->takeAt(0)) != nullptr) {
-            // Удаляем виджет из элемента лейаута
-            if (QWidget* widget = item->widget()) {
-                widget->deleteLater(); // Безопасное удаление виджета
-            }
-            // Удаляем сам элемент лейаута
-            delete item;
-        }
-
-        delete gridLayoutCentralWidget;
-        gridLayoutCentralWidget = nullptr; // Обнуляем указатель
-    }
-
-    setCentralWidget(nullptr);
-
-    if (DICOMSeries.contains(seriesUID)) {
-        currentData = DICOMSeries[seriesUID];
-
-        if (currentData->convertITKtoVTK()) {
-
-            if (MPR && currentData->getVTKImage()->GetDimensions()[2] > 1) {
-                centralWidget = new QWidget(this);
-
-                setCentralWidget(centralWidget);
-                gridLayoutCentralWidget = new QGridLayout();
-                centralWidget->setLayout(gridLayoutCentralWidget);
-
-
-                projectionViewAxial.vtkWidget = new QVTKOpenGLNativeWidget();
-                projectionViewSagital.vtkWidget = new QVTKOpenGLNativeWidget();
-                projectionViewSagital.sliceOrientation = vtkImageViewer2::SLICE_ORIENTATION_XZ;
-                projectionViewFrontal.vtkWidget = new QVTKOpenGLNativeWidget();
-                projectionViewFrontal.sliceOrientation = vtkImageViewer2::SLICE_ORIENTATION_YZ;
-
-                // Добавляем виджеты в макет
-                gridLayoutCentralWidget->addWidget(projectionViewAxial.vtkWidget, 0, 0, 2, 1);
-                gridLayoutCentralWidget->addWidget(projectionViewSagital.vtkWidget, 0, 1);
-                gridLayoutCentralWidget->addWidget(projectionViewFrontal.vtkWidget, 1, 1);
-
-                // Растяжение колонок
-                gridLayoutCentralWidget->setColumnStretch(0, 2);
-                gridLayoutCentralWidget->setColumnStretch(1, 1);
-
-                QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewAxial); });
-                QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewSagital); });
-                QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewFrontal); });
-
-            } else {
-                projectionViewAxial.vtkWidget = new QVTKOpenGLNativeWidget();
-                setCentralWidget(projectionViewAxial.vtkWidget);
-                QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewAxial); });
-            }
-
-        } else {
-            qDebug() << "MainWindow::onThumbnailClicked: Ошибка инициализации компонентов отображения VTK виджета!";
-        }
-    }
-}
-
-
-void MainWindow::openFile() {
-    QString filePath = QFileDialog::getOpenFileName(
-        nullptr,
-        "Выберите файл",
-        QDir::homePath(),
-        "DICOM Files (*.dcm *.DCM *);;All Files (*)"  // Фильтр для файлов, например, DICOM
-        );
-
-    if (!filePath.isEmpty()) {
-        qDebug() << "Выбран файл:" << filePath;
-
-        if (!DICOMSeries.isEmpty()) {
-            DICOMSeries.clear();
-        }
-
-        try {
-            loadDicomFromFile(filePath);
-
-            if (currentData->convertITKtoVTK()) {
-                projectionViewAxial.vtkWidget = new QVTKOpenGLNativeWidget();
-                setCentralWidget(projectionViewAxial.vtkWidget);
-                QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewAxial); });
-            } else {
-                qDebug() << "MainWindow::openFile: Ошибка инициализации компонентов отображения VTK виджета!";
-            }
-
-        } catch (const itk::ExceptionObject &e) {
-            qDebug() << "Ошибка ITK: " << e.what();
-        } catch (const std::exception &e) {
-            qDebug() << "Неожиданная ошибка: " << e.what();
-        }
-    } else {
-        qDebug() << "Выбор файла отменен.";
-        return;
-    }
-}
-
-
-
-
-void MainWindow::openFolder() {
-
-    QString folderPath = QFileDialog::getExistingDirectory(
-        nullptr,
-        "Выберите папку",
-        QDir::homePath(),
-        QFileDialog::ShowDirsOnly
-        );
-
-    if (!folderPath.isEmpty()) {
-        qDebug() << "Выбрана папка:" << folderPath;
-
-        if (!DICOMSeries.isEmpty()) {
-            DICOMSeries.clear();
-        }
-
-
-        try {
-            loadDicomFromDirectory(folderPath);
-
-            if (currentData->getITKImage().IsNull()) {
-                itk::Image<float, 3>::Pointer itkImage = ImageUtils::ConvertQImageToITKImage(currentData->getThumbnail());
-                currentData->setITKImage(itkImage);
-            }
-
-            if (currentData->convertITKtoVTK()) {
-
-                if (MPR && currentData->getVTKImage()->GetDimensions()[2] > 1) {
-
-                    centralWidget = new QWidget(this);
-
-                    setCentralWidget(centralWidget);
-                    gridLayoutCentralWidget = new QGridLayout();
-                    centralWidget->setLayout(gridLayoutCentralWidget);
-
-
-                    projectionViewAxial.vtkWidget = new QVTKOpenGLNativeWidget();
-                    projectionViewSagital.vtkWidget = new QVTKOpenGLNativeWidget();
-                    projectionViewSagital.sliceOrientation = vtkImageViewer2::SLICE_ORIENTATION_XZ;
-                    projectionViewFrontal.vtkWidget = new QVTKOpenGLNativeWidget();
-                    projectionViewFrontal.sliceOrientation = vtkImageViewer2::SLICE_ORIENTATION_YZ;
-
-                    // Добавляем виджеты в макет
-                    gridLayoutCentralWidget->addWidget(projectionViewAxial.vtkWidget, 0, 0, 2, 1);
-                    gridLayoutCentralWidget->addWidget(projectionViewSagital.vtkWidget, 0, 1);
-                    gridLayoutCentralWidget->addWidget(projectionViewFrontal.vtkWidget, 1, 1);
-
-                    // Растяжение колонок
-                    gridLayoutCentralWidget->setColumnStretch(0, 2);
-                    gridLayoutCentralWidget->setColumnStretch(1, 1);
-
-                    QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewAxial); });
-                    QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewSagital); });
-                    QTimer::singleShot(0, this, [this]() { initializeVTKImageViewer(this->currentData, projectionViewFrontal); });
-
-
-                } else {
-                    projectionViewAxial.vtkWidget = new QVTKOpenGLNativeWidget();
-                    setCentralWidget(projectionViewAxial.vtkWidget);
-                    initializeVTKImageViewer(this->currentData, projectionViewAxial);
-                }
-
-            } else {
-                qDebug() << "MainWindow::openFolder: Ошибка инициализации компонентов отображения VTK виджета!";
-            }
-
-        } catch (const itk::ExceptionObject &e) {
-            qDebug() << "Ошибка ITK: " << e.what();
-        } catch (const std::exception &e) {
-            qDebug() << "Неожиданная ошибка: " << e.what();
-        }
-    } else {
-        qDebug() << "Выбор папки отменен.";
-        return;
-    }
-}
-
-*/
-
 
 
 
 void MainWindow::loadDicomFromDirectory(const QString &folderPath) {
-
 
     using ImageType = itk::Image<float, 3>;
 
@@ -625,6 +475,12 @@ void MainWindow::loadDicomFromDirectory(const QString &folderPath) {
         QSharedPointer<DataDICOM> data(new DataDICOM);
 
         data->setMetadata(dicomIO->GetMetaDataDictionary());
+
+        std::string modality;
+        if (itk::ExposeMetaData<std::string>(dicomIO->GetMetaDataDictionary(), "0008|0060", modality)) {
+            qDebug() << "Modality of DICOM series: " << QString::fromStdString(modality);
+            data->setModality(QString::fromStdString(modality));
+        }
 
         std::string photometric;
         if (itk::ExposeMetaData<std::string>(dicomIO->GetMetaDataDictionary(), "0028|0004", photometric)) {
@@ -717,7 +573,7 @@ void MainWindow::loadDicomFromDirectory(const QString &folderPath) {
 }
 
 
-void MainWindow::loadDicomFromFile(const QString &filePath) {
+bool MainWindow::loadDicomFromFile(const QString &filePath) {
 
 
     using ImageType = itk::Image<float, 3>;
@@ -733,13 +589,19 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
     try {
         reader->Update();
     } catch (itk::ExceptionObject &error) {
-        qDebug() << "Ошибка при чтении DICOM-файла:" << error.what();
-        return;
+        qDebug() << "MainWindow::loadDicomFromFile: Ошибка при чтении DICOM-файла:" << error.what();
+        return false;
     }
 
     QSharedPointer<DataDICOM> data(new DataDICOM);
 
     data->setMetadata(dicomIO->GetMetaDataDictionary());
+
+    std::string modality;
+    if (itk::ExposeMetaData<std::string>(dicomIO->GetMetaDataDictionary(), "0008|0060", modality)) {
+        qDebug() << "DICOM file modality: " << QString::fromStdString(modality);
+        data->setModality(QString::fromStdString(modality));
+    }
 
     std::string photometric;
     if (itk::ExposeMetaData<std::string>(dicomIO->GetMetaDataDictionary(), "0028|0004", photometric)) {
@@ -759,7 +621,7 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
     std::string seriesUID;
     if (!itk::ExposeMetaData<std::string>(data->getMetaData(), "0008|0016", seriesUID)) {
         qDebug() << "MainWindow::loadDicomFromFile: Ошибка: не удалось извлечь Series UID из метаданных!";
-        return;
+        return false;
     }
 
     // Извлекаем WindowCenter
@@ -823,7 +685,7 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
         currentData = it.value();
     } else {
         qDebug() << "MainWindow::loadDicomFromFile: Ошибка: seriesUID не найден в DICOMSeries.";
-        return;
+        return false;
     }
 
     qDebug() << ":MainWindow::loadDicomFromFile UID: " << QString::fromStdString(seriesUID) << " загружено.";
@@ -833,7 +695,7 @@ void MainWindow::loadDicomFromFile(const QString &filePath) {
     gallery->addThumbnail(qDescription, &currentData->getThumbnail(), data->getSeriesUID());
     gallery->show();
 
-
+    return true;
 }
 
 
@@ -953,7 +815,7 @@ void MainWindow::setDefaultSettings() {
     settings.setValue("language", QLocale::system().name().left(2));
     settings.setValue("windowSize", QSize(1024, 768));
     settings.setValue("windowPosition", QPoint(100, 100));
-    settings.setValue("galleryVisible", true);
+    settings.setValue("galleryVisible", false);
     settings.sync();  // Сохранить настройки
 }
 
@@ -966,6 +828,40 @@ void MainWindow::showEvent(QShowEvent *event) {
     if (firstShow) {  // Гарантируем, что restoreSettings() вызывается только один раз
         firstShow = false;
         restoreSettings();
+    }
+}
+void MainWindow::resizeEvent(QResizeEvent *event) {
+    // Вызов стандартного поведения
+    QMainWindow::resizeEvent(event);
+
+    if(!CTBasicToolbarPanel.isNull()) {
+        // Получаем новые размеры главного окна
+        int newWidth = event->size().width();
+        int newHeight = event->size().height();
+
+        // Проверяем, если панель прикреплена (не в режиме "topLevel")
+        if (!CTBasicToolbarPanel->isFloating()) {
+            // Получаем позицию панели в главном окне
+            Qt::DockWidgetArea area = this->dockWidgetArea(CTBasicToolbarPanel.data());
+
+            if (area == Qt::LeftDockWidgetArea || area == Qt::RightDockWidgetArea) {
+                // Устанавливаем ограничения для ширины
+                int newWidthLimit = qMax(200, static_cast<int>(newWidth * 0.10));
+                CTBasicToolbarPanel->setMinimumWidth(newWidthLimit);
+                CTBasicToolbarPanel->setMaximumWidth(newWidthLimit);
+                // Ограничиваем только ширину, оставляем высоту гибкой
+                CTBasicToolbarPanel->setMinimumHeight(0);
+                CTBasicToolbarPanel->setMaximumHeight(QWIDGETSIZE_MAX);
+            } else if (area == Qt::TopDockWidgetArea || area == Qt::BottomDockWidgetArea) {
+                // Устанавливаем ограничения для высоты
+                int newHeightLimit = qMax(200, static_cast<int>(newHeight * 0.10));
+                CTBasicToolbarPanel->setMinimumHeight(newHeightLimit);
+                CTBasicToolbarPanel->setMaximumHeight(newHeightLimit);
+                // Ограничиваем только высоту, оставляем ширину гибкой
+                CTBasicToolbarPanel->setMinimumWidth(0);
+                CTBasicToolbarPanel->setMaximumWidth(QWIDGETSIZE_MAX);
+            }
+        }
     }
 }
 

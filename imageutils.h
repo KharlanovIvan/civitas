@@ -9,8 +9,8 @@
 #include <dcmtk/dcmdata/dctk.h>
 #include <dcmtk/dcmimgle/dcmimage.h>
 #include <dcmtk/dcmdata/dcdeftag.h>
-#include <itkImageRegionConstIterator.h>
 
+#include <itkImageRegionConstIterator.h>
 #include <itkMetaDataObject.h>
 #include <itkImage.h>
 #include <itkGDCMImageIO.h>
@@ -18,7 +18,12 @@
 #include <itkMatrix.h>
 #include <itkFlipImageFilter.h>
 #include <itkImportImageFilter.h>
+#include <itkImageToVTKImageFilter.h>
+#include <itkImage.h>
 
+#include <vtkSmartPointer.h>
+#include <vtkImageData.h>
+#include <vtkNew.h>
 
 
 
@@ -49,5 +54,6 @@ public:
 
     static DicomImage* ConvertITKSliceToDicomImage(itk::Image<float, 3>::Pointer itkImageSlice);
 
+    static vtkSmartPointer<vtkImageData> convertITKtoVTK(itk::Image<float, 3>::Pointer ItkImage);
 
 };

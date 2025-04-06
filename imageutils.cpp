@@ -28,7 +28,38 @@ itk::Image<float, 3>::Pointer ImageUtils::ApplyWindowLevelITK(
     }
 }
 
+vtkSmartPointer<vtkImageData> ImageUtils::convertITKtoVTK(itk::Image<float, 3>::Pointer ITKImage) {
 
+    if (!ITKImage) {
+        qDebug() << "ImageUtils::convertITKtoVTK: Ошибка! ITK-изображение отсутствует.";
+        return nullptr;
+    }
+
+    qDebug() << "ImageUtils::convertITKtoVTK: Начинаем преобразование ITK->VTK...";
+
+    try {
+        using ITKToVTKFilterType = itk::ImageToVTKImageFilter<itk::Image<float, 3>>;
+        ITKToVTKFilterType::Pointer itkToVtkFilter = ITKToVTKFilterType::New();
+        itkToVtkFilter->SetInput(ITKImage);
+        itkToVtkFilter->Update();
+
+        vtkSmartPointer<vtkImageData> VTKImage = vtkSmartPointer<vtkImageData>::New();
+        VTKImage->ShallowCopy(itkToVtkFilter->GetOutput());
+        return VTKImage;
+
+
+        if (!VTKImage) {
+            qDebug() << "ImageUtils::convertITKtoVTK: Конвертация ITK->VTK не успела завершится!.";
+            return nullptr;
+        }
+
+        qDebug() << "ImageUtils::convertITKtoVTK: Конвертация ITK->VTK завершена успешно.";
+         return VTKImage;
+    } catch (const std::exception& e) {
+        qDebug() << "ImageUtils::convertITKtoVTK: Исключение во время конвертации ->" << e.what();
+        return nullptr;
+    }
+}
 
 DicomImage* ImageUtils::ConvertITKSliceToDicomImage(itk::Image<float, 3>::Pointer itkImageSlice) {
     // 1. Проверка входных данных

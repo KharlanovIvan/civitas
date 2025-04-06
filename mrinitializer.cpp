@@ -2,7 +2,7 @@
 
 
 
-void MRInitializer::initializePipeline(VTKPipelineViewer* viewer, const QSharedPointer<DataDICOM>& data)  {
+void MRInitializer::initializePipeline(QSharedPointer<VTKPipelineViewer> viewer, const QSharedPointer<DataDICOM>& data)  {
     qDebug() << "MRInitializer: Инициализация пайплайна для MR";
     // Здесь можно задать другие фильтры или параметры для MR
     //viewer->initializePipeline(data);  // базовая инициализация

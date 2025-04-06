@@ -49,6 +49,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         ctinitializer.h ctinitializer.cpp
         mrinitializer.h mrinitializer.cpp
         modalityinitializerfactory.h modalityinitializerfactory.cpp
+        ctbasictoolbar.h ctbasictoolbar.cpp
 
 
 

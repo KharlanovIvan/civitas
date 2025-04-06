@@ -17,15 +17,18 @@ bool DataDICOM::setITKImage(itk::Image<float, 3>::Pointer image) {
     ITKImage = image; // Сохраняем ITK-изображение
     qDebug() << "DataDICOM::setITKImage: ITK изображение установлено.";
 
+    VTKImage = ImageUtils::convertITKtoVTK(ITKImage);
+
     return true;
 }
 
-bool DataDICOM::convertITKtoVTK() {
-    QMutexLocker locker(&vtkImageMutex);
 
-    if (!ITKImage) {
+/*
+vtkSmartPointer<vtkImageData> DataDICOM::convertITKtoVTK(itk::Image<float, 3>::Pointer ItkImage) {
+
+    if (!ItkImage) {
         qDebug() << "DataDICOM::convertITKtoVTK: Ошибка! ITK-изображение отсутствует.";
-        return false;
+        return nullptr;
     }
 
     qDebug() << "DataDICOM::convertITKtoVTK: Начинаем преобразование ITK->VTK...";
@@ -33,32 +36,32 @@ bool DataDICOM::convertITKtoVTK() {
     try {
         using ITKToVTKFilterType = itk::ImageToVTKImageFilter<ImageType>;
         ITKToVTKFilterType::Pointer itkToVtkFilter = ITKToVTKFilterType::New();
-        itkToVtkFilter->SetInput(ITKImage);
+        itkToVtkFilter->SetInput(ItkImage);
         itkToVtkFilter->Update();
 
-        VTKImage = vtkSmartPointer<vtkImageData>::New();
-        VTKImage = itkToVtkFilter->GetOutput();
+        vtkSmartPointer<vtkImageData> VtkImage = vtkSmartPointer<vtkImageData>::New();
+        VtkImage = itkToVtkFilter->GetOutput();
 
-        if (!VTKImage) {
-            vtkImageReady = false;
+        if (!VtkImage) {
             qDebug() << "DataDICOM::convertITKtoVTK: Конвертация ITK->VTK не успела завершится!.";
-            return false;
+            return nullptr;
         }
 
-        vtkImageReady = true;
         qDebug() << "DataDICOM::convertITKtoVTK: Конвертация ITK->VTK завершена успешно.";
-        return true;
+
     } catch (const std::exception& e) {
         qDebug() << "DataDICOM::convertITKtoVTK: Исключение во время конвертации ->" << e.what();
-        return false;
+        return nullptr;
     }
-}
 
+    return VtkImage;
+}
+*/
 vtkSmartPointer<vtkImageData> DataDICOM::getVTKImage() {
     QMutexLocker locker(&vtkImageMutex);
 
-    if (!vtkImageReady) {
-        qDebug() << "DataDICOM::getVTKImage: VTK-изображение ещё не готово!";
+    if (!VTKImage) {
+        qDebug() << "DataDICOM::getVTKImage: VTK-изображение пустое!";
         return nullptr;
     }
 
@@ -69,8 +72,8 @@ vtkSmartPointer<vtkImageData> DataDICOM::getVTKImage() {
 vtkSmartPointer<vtkImageData> DataDICOM::getDeepCopyVTKImage() {
     QMutexLocker locker(&vtkImageMutex);
 
-    if (!vtkImageReady || !VTKImage) {
-        qDebug() << "DataDICOM::getDeepCopyVTKImage: VTK-изображение ещё не готово или отсутствует!";
+    if (!VTKImage) {
+        qDebug() << "DataDICOM::getDeepCopyVTKImage: VTK-изображение ещё отсутствует!";
         return nullptr;
     }
 
@@ -95,6 +98,14 @@ QString DataDICOM::getSeriesUID() const {
 
 void DataDICOM::setSeriesUID(const QString& uid) {
     seriesUID = uid;
+}
+
+QString DataDICOM::getModality() const {
+    return modality;
+}
+
+void DataDICOM::setModality(const QString& modality) {
+    this->modality = modality;
 }
 
 QStringList DataDICOM::getFilePaths() const {
@@ -134,10 +145,6 @@ itk::MetaDataDictionary DataDICOM::getMetaData() const {
 
 void DataDICOM::setMetadata(itk::MetaDataDictionary metaData) {
     this->metaData = metaData;
-}
-
-bool DataDICOM::isVTKImageReady() const {
-    return vtkImageReady;
 }
 
 

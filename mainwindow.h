@@ -57,9 +57,13 @@
 
 #include "custominteractorstyle2d.h"
 #include "gallery.h"
+#include "ctbasictoolbar.h"
 #include "imageutils.h"
 #include "datadicom.h"
 #include "vtkpipelineviewer.h"
+#include "IModalityInitializer.h"
+#include "modalityinitializerfactory.h"
+#include "ctinitializer.h"
 
 
 
@@ -103,6 +107,7 @@ class MainWindow : public QMainWindow
     QMenu* pSetPanel;
 
     QAction *pActGalleryPanel;
+    QAction *pActCTBasicToolbarPanel;
 
      // Меню Настройки
     QMenu *pSettings;
@@ -115,11 +120,12 @@ class MainWindow : public QMainWindow
     QMenu *pHelp;
 
     Gallery* gallery;
+    QSharedPointer<CTBasicToolbar> CTBasicToolbarPanel;
 
 private slots:
     void openFolder();
     void openFile();
-    void loadDicomFromFile(const QString &filePath);
+    bool loadDicomFromFile(const QString &filePath);
     void loadDicomFromDirectory(const QString &folderPath);
     void saveSettings();
     void restoreSettings();
@@ -136,7 +142,9 @@ private slots:
 
     void setupMenuBar();
 
+public slots:
     void initGallery();
+    void initCTBasicToolbar();
 
     void setDefaultSettings();
 
@@ -146,6 +154,7 @@ private slots:
 protected:
     void closeEvent(QCloseEvent* event) override;
     void showEvent(QShowEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 public:
     MainWindow(QWidget *parent = nullptr);
