@@ -5,6 +5,7 @@
 #include "IModalityInitializer.h"
 #include "vtkpipelineviewer.h"
 #include "mainwindow.h"
+#include "custominteractorstyle2d.h"
 
 #include <QDebug>
 

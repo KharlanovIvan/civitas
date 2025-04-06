@@ -5,61 +5,108 @@
 #include <QPushButton>
 #include <QFormLayout>
 #include <QStackedLayout>
+#include <QSpinBox>
+#include <QSlider>
+#include <QLabel>
+#include <QCheckBox>
+#include <QRadioButton>
+
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QToolButton>
+#include <QLineEdit>
+#include <QProgressBar>
+#include <QRadioButton>
+#include <QRadioButton>
+#include <QRadioButton>
+
 
 CTBasicToolbar::CTBasicToolbar(QWidget *parent) : QDockWidget(parent) {
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    // Создаем контейнер для группировки элементов
+    // Центральный контейнер для панели
     QWidget *centralWidget = new QWidget(this);
-    setWidget(centralWidget); // Устанавливаем центральный виджет для QDockWidget
+    setWidget(centralWidget);
 
-    // Создаем группу и макет для первой группы
-    QGroupBox *group1 = new QGroupBox("Группа 1");
-    QVBoxLayout *groupLayout1 = new QVBoxLayout();
-    group1->setLayout(groupLayout1);
-
-    // Добавляем кнопки в группу
-    QPushButton *button1 = new QPushButton("Button 1");
-    QPushButton *button2 = new QPushButton("Button 2");
-
-    groupLayout1->addWidget(button1);
-    groupLayout1->addWidget(button2);
-
-    // Изменение фона области с кнопками (dark theme)
-    group1->setStyleSheet(
-        "QGroupBox {"
-        "   border: 2px solid #555555;"   // Темная рамка
-        "   border-radius: 5px;"           // Скругление углов рамки
-        "   background-color: #2e2e2e;"    // Темный фон для группы
-        "   padding: 10px;"                // Отступы внутри группы
-        "}"
-        "QGroupBox:title {"
-        "   subcontrol-origin: margin;"
-        "   subcontrol-position: top center;"
-        "   padding: 0 10px;"
-        "   font-size: 14px;"
-        "   font-weight: bold;"
-        "   color: #9a9a9a;"               // Цвет текста в заголовке
-        "}"
-        "QVBoxLayout {"
-        "   background-color: #3a3a3a;"    // Темный фон для области с кнопками
-        "}"
-        "QPushButton {"
-        "   background-color: #444444;"     // Темный фон для кнопок
-        "   color: #ffffff;"                // Белый текст на кнопках
-        "   border: 1px solid #888888;"     // Светлая рамка вокруг кнопок
-        "   border-radius: 5px;"            // Скругление углов кнопок
-        "   padding: 5px;"                  // Отступы внутри кнопки
-        "}"
-        );
-
-
-
-    // Помещаем группу в основной макет центрального виджета
     QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
-    mainLayout->addWidget(group1);
 
-    // Следим за тем, откреплена ли панель
+    // ==== Группа 1: Навигация по срезам ====
+    QGroupBox *sliceGroup = new QGroupBox("Срезы");
+    QVBoxLayout *sliceLayout = new QVBoxLayout();
+
+    sliceSlider = new QSlider(Qt::Horizontal);
+    sliceSlider->setMinimum(0);
+    sliceSlider->setMaximum(100); // будет адаптироваться
+    sliceLayout->addWidget(sliceSlider);
+
+    QLabel *sliceLabel = new QLabel("Срез: 0");
+    sliceLayout->addWidget(sliceLabel);
+
+    connect(sliceSlider, &QSlider::valueChanged, this, [=](int value){
+        sliceLabel->setText(QString("Срез: %1").arg(value));
+        emit sliceChanged(value);
+    });
+
+    sliceGroup->setLayout(sliceLayout);
+    mainLayout->addWidget(sliceGroup);
+
+    // ==== Группа 2: Окно/уровень (window/level) ====
+    QGroupBox *windowGroup = new QGroupBox("Окно/Уровень");
+    QGridLayout *wlLayout = new QGridLayout();
+
+    windowSpin = new QSpinBox();
+    levelSpin = new QSpinBox();
+    windowSpin->setRange(1, 5000);
+    levelSpin->setRange(-1000, 1000);
+
+    wlLayout->addWidget(new QLabel("Окно:"), 0, 0);
+    wlLayout->addWidget(windowSpin, 0, 1);
+    wlLayout->addWidget(new QLabel("Уровень:"), 1, 0);
+    wlLayout->addWidget(levelSpin, 1, 1);
+
+    connect(windowSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+            this, &CTBasicToolbar::windowChanged);
+    connect(levelSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+            this, &CTBasicToolbar::levelChanged);
+
+    windowGroup->setLayout(wlLayout);
+    mainLayout->addWidget(windowGroup);
+
+    // ==== Группа 3: Режим отображения ====
+    QGroupBox *viewGroup = new QGroupBox("Режим отображения");
+    QVBoxLayout *viewLayout = new QVBoxLayout();
+
+    viewCombo = new QComboBox();
+    viewCombo->addItems({"Axial", "Sagittal", "Coronal", "3D View"});
+    viewLayout->addWidget(viewCombo);
+
+    connect(viewCombo, &QComboBox::currentTextChanged,
+            this, &CTBasicToolbar::viewModeChanged);
+
+    viewGroup->setLayout(viewLayout);
+    mainLayout->addWidget(viewGroup);
+
+    // ==== Группа 4: Фильтрация / обработка ====
+    QGroupBox *filterGroup = new QGroupBox("Обработка");
+    QVBoxLayout *filterLayout = new QVBoxLayout();
+
+    QPushButton *denoiseButton = new QPushButton("Шумоподавление");
+    QPushButton *sharpenButton = new QPushButton("Резкость");
+    QPushButton *thresholdButton = new QPushButton("Порог");
+
+    filterLayout->addWidget(denoiseButton);
+    filterLayout->addWidget(sharpenButton);
+    filterLayout->addWidget(thresholdButton);
+
+    connect(denoiseButton, &QPushButton::clicked, this, &CTBasicToolbar::applyDenoise);
+    connect(sharpenButton, &QPushButton::clicked, this, &CTBasicToolbar::applySharpen);
+    connect(thresholdButton, &QPushButton::clicked, this, &CTBasicToolbar::applyThreshold);
+
+    filterGroup->setLayout(filterLayout);
+    mainLayout->addWidget(filterGroup);
+
+    mainLayout->addStretch();
+
     connect(this, &QDockWidget::topLevelChanged, this, &CTBasicToolbar::handleTopLevelChanged);
 }
 

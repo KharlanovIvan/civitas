@@ -125,11 +125,15 @@ class MainWindow : public QMainWindow
 private slots:
     void openFolder();
     void openFile();
+
     bool loadDicomFromFile(const QString &filePath);
-    void loadDicomFromDirectory(const QString &folderPath);
+    bool loadDicomFromDirectory(const QString &folderPath);
+
     void saveSettings();
     void restoreSettings();
+
     void changeLanguage(const QString &newLang);
+
     void updateUI();
 
     void setupUI();
@@ -141,6 +145,8 @@ private slots:
     void initHelpMenu();
 
     void setupMenuBar();
+
+    void displayCurrentImage();
 
 public slots:
     void initGallery();

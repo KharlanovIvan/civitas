@@ -11,6 +11,9 @@
 
         viewer->setWindowLevelFilter(data->getWindowWidth(), data->getWindowCenter());
 
+        vtkSmartPointer<CustomInteractorStyle2D> CTInteractorStyle = vtkSmartPointer<CustomInteractorStyle2D>::New();
+        viewer->setInteractorStyle(CTInteractorStyle);
+
 
     }
 
