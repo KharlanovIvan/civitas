@@ -127,7 +127,38 @@ void MainWindow::initGallery() {
     connect(gallery, &Gallery::thumbnailClicked, this, &MainWindow::onThumbnailClicked);
     connect(gallery, &Gallery::thumbnailDoubleClicked, this, &MainWindow::onThumbnailDoubleClicked);
 
+    connect(gallery, &Gallery::seriesDropped, this, &MainWindow::onSeriesDropped);
+
 }
+
+
+void MainWindow::onSeriesDropped(const QString &seriesUID, const QPoint &dropPosition) {
+    qDebug() << "MainWindow: Перетащена серия с UID:" << seriesUID;
+    qDebug() << "Позиция дропа: " << dropPosition;
+
+    // Получаем виджет, на который был осуществлен дроп
+    QVTKOpenGLNativeWidget* widgetUnderDrop = qobject_cast<QVTKOpenGLNativeWidget*>(childAt(dropPosition));
+
+    if (!widgetUnderDrop) {
+        qDebug() << "Не удалось определить виджет под дропом.";
+        return;
+    }
+
+    if (!widgetUnderDrop) {
+        qDebug() << "Дроп не на VTKPipelineViewer.";
+        return;
+    }
+
+    // Логируем, что дроп был на виджет VTKPipelineViewer
+    qDebug() << "Дроп осуществлен на VTKPipelineViewer.";
+
+    QSharedPointer<VTKPipelineViewer> pipelineViewer = QSharedPointer<VTKPipelineViewer>::create();
+    // Загрузим данные и создадим новый viewer для этой серии
+    viewerManager->addViewer(pipelineViewer);
+    pipelineViewer->initializePipeline(DICOMSeries[seriesUID]);
+}
+
+
 
 void MainWindow::initFileMenu() {
     // Создаем меню "Файл"
@@ -276,6 +307,36 @@ void MainWindow::displayCurrentImage() {
     QString modality = currentData->getModality();
     qDebug() << "MainWindow::openFile: Модальность: " << modality;
 
+    // Инициализация ViewerManager, если ещё не создан
+    if (!viewerManager) {
+        viewerManager = new VTKViewerManager(this);
+        setCentralWidget(viewerManager);
+    }
+
+    // Создаём Viewer
+    QSharedPointer<VTKPipelineViewer> viewer(new VTKPipelineViewer(this));
+    viewerManager->addViewer(viewer);
+
+    // Создаём инициализатор через фабрику
+    QSharedPointer<IModalityInitializer> initializer(ModalityInitializerFactory::createInitializer(modality));
+    if (initializer) {
+        QTimer::singleShot(0, this, [=]() {
+            initializer->initializePipeline(viewer, currentData);
+            initializer->initializeUI(this);
+        });
+    } else {
+        qDebug() << "MainWindow::openFile: Неизвестная модальность. Используем стандартную инициализацию.";
+        QTimer::singleShot(0, this, [=]() {
+            viewer->initializePipeline(currentData);
+        });
+    }
+}
+
+/*
+void MainWindow::displayCurrentImage() {
+    QString modality = currentData->getModality();
+    qDebug() << "MainWindow::openFile: Модальность: " << modality;
+
     // Создаём объект VTKPipelineViewer
     QSharedPointer<VTKPipelineViewer> viewer(new VTKPipelineViewer(this));
     vtkViewers.append(viewer);
@@ -312,7 +373,7 @@ void MainWindow::displayCurrentImage() {
         });
     }
 }
-
+*/
 
 void MainWindow::onThumbnailClicked(const QString &seriesUID) {
     qDebug() << "Щелчок на серии с UID:" << seriesUID;
@@ -330,11 +391,11 @@ void MainWindow::openFile() {
     if (!filePath.isEmpty()) {
         qDebug() << "MainWindow::openFile: Выбран файл:" << filePath;
         if (!DICOMSeries.isEmpty()) {
-            DICOMSeries.clear();
+            //DICOMSeries.clear();
         }
 
         if (!vtkViewers.empty()) {
-            vtkViewers.clear();
+            //vtkViewers.clear();
         }
 
         try {
@@ -359,6 +420,47 @@ void MainWindow::openFile() {
     }
 }
 
+
+void MainWindow::openFolder() {
+    QString folderPath = QFileDialog::getExistingDirectory(
+        nullptr,
+        "Выберите папку",
+        QDir::homePath(),
+        QFileDialog::ShowDirsOnly
+        );
+
+    if (folderPath.isEmpty()) {
+        qDebug() << "MainWindow::openFolder: Выбор папки отменен.";
+        return;
+    }
+
+    qDebug() << "MainWindow::openFolder: Выбрана папка:" << folderPath;
+
+    if (!DICOMSeries.isEmpty()) {
+        DICOMSeries.clear();
+    }
+
+    if (viewerManager) {
+        viewerManager->clearAllViewers();
+    }
+
+    try {
+        if (!loadDicomFromDirectory(folderPath)) {
+            qDebug() << "MainWindow::openFolder: В указанном каталоге нет DICOM-файлов: " << folderPath;
+            QMessageBox::critical(this, "Ошибка", QString("В указанном каталоге нет DICOM-файлов: \n%1").arg(folderPath));
+            return;
+        }
+
+        displayCurrentImage();
+
+    } catch (const itk::ExceptionObject &e) {
+        QMessageBox::critical(this, "Ошибка", QString("Ошибка ITK:\n%1").arg(e.what()));
+    } catch (const std::exception &e) {
+        QMessageBox::critical(this, "Ошибка", QString("Неизвестная ошибка:\n%1").arg(e.what()));
+    }
+}
+
+/*
 
 void MainWindow::openFolder() {
 
@@ -401,7 +503,7 @@ void MainWindow::openFolder() {
         return;
     }
 }
-
+*/
 
 
 bool MainWindow::loadDicomFromDirectory(const QString &folderPath) {
@@ -482,6 +584,8 @@ bool MainWindow::loadDicomFromDirectory(const QString &folderPath) {
         QString qDescription = QString::fromStdString(descriptionStr);
         if (qDescription.isEmpty()) {
             qDescription = data->getSeriesUID();
+        } else {
+            qDebug() << "Series Description: " << qDescription;
         }
 
         if(qDescription.contains("Topogram") || qDescription.contains("Patient Protocol")) {
@@ -655,6 +759,8 @@ bool MainWindow::loadDicomFromFile(const QString &filePath) {
     gallery->addThumbnail(qDescription, &currentData->getThumbnail(), data->getSeriesUID());
     gallery->show();
 
+
+
     return true;
 }
 
@@ -823,5 +929,6 @@ void MainWindow::resizeEvent(QResizeEvent *event) {
             }
         }
     }
+
 }
 

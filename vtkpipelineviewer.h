@@ -2,6 +2,8 @@
 
 #include <QWidget>
 #include <QDebug>
+#include <QVBoxLayout>
+#include <QMouseEvent>
 
 // VTK-заголовки
 #include <QVTKOpenGLNativeWidget.h>
@@ -75,6 +77,12 @@ public:
     void setWindowLevelFilter(double window, double level);
 
     void setFlipFilter(int flip);
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override;
+
+signals:
+    void clicked(VTKPipelineViewer* viewer, bool isCtrlPressed);
 
 
 private:

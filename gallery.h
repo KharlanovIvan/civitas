@@ -6,6 +6,12 @@
 #include <QSpacerItem>
 #include <QResizeEvent>
 #include <QMainWindow>  // Добавляем заголовочный файл
+#include <QMimeData>
+#include <QDrag>
+#include <QMouseEvent>
+#include <QApplication>
+
+#include "thumbnaillistwidget.h"
 
 class Gallery : public QDockWidget {
     Q_OBJECT
@@ -29,16 +35,27 @@ public:
 
     void sortThumbnails();
 
+    ThumbnailListWidget* getthumbnailList(){ return thumbnailList; };
+
 signals:
     // Сигнал, который будет отправляться при выборе миниатюры
     void thumbnailClicked(const QString &seriesUID);
     void thumbnailDoubleClicked(const QString &seriesUID);
+    // Сигнал для обработки перетаскивания серии
+    void seriesDropped(const QString &seriesUID, const QPoint &dropPosition);
+
+
 
 private:
-    QListWidget *thumbnailList; // Список миниатюр
+    QPoint m_ptDragPos;
+
+
+    ThumbnailListWidget* thumbnailList;
 
     void updateThumbnailsSize();
 
     void resizeEvent(QResizeEvent *event) override;
+
+protected:
 
 };

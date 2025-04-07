@@ -1,5 +1,5 @@
 #include "VTKPipelineViewer.h"
-#include <QVBoxLayout>
+
 
 // Конструктор
 VTKPipelineViewer::VTKPipelineViewer(QWidget* parent)
@@ -9,7 +9,12 @@ VTKPipelineViewer::VTKPipelineViewer(QWidget* parent)
 }
 
 
-
+void VTKPipelineViewer::mousePressEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        emit clicked(this, event->modifiers() & Qt::ControlModifier);
+    }
+    QWidget::mousePressEvent(event); // Не забудьте вызвать базовую реализацию
+}
 
 
 // Деструктор

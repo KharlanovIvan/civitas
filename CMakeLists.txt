@@ -50,6 +50,9 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         mrinitializer.h mrinitializer.cpp
         modalityinitializerfactory.h modalityinitializerfactory.cpp
         ctbasictoolbar.h ctbasictoolbar.cpp
+        vtkviewermanager.h vtkviewermanager.cpp
+        thumbnaillistwidget.h thumbnaillistwidget.cpp
+
 
 
 

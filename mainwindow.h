@@ -64,12 +64,16 @@
 #include "IModalityInitializer.h"
 #include "modalityinitializerfactory.h"
 #include "ctinitializer.h"
+#include "vtkviewermanager.h"
 
 
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
+
+    VTKViewerManager* viewerManager = nullptr;
+    QWidget* viewerContainer;  // Для встраивания ViewerLayoutManager в центральный виджет
 
     bool MPR = true;
     QVector<QSharedPointer<VTKPipelineViewer>> vtkViewers;
@@ -156,6 +160,9 @@ public slots:
 
     void onThumbnailClicked(const QString &seriesUID);
     void onThumbnailDoubleClicked(const QString &seriesUID);
+
+    void onSeriesDropped(const QString &seriesUID, const QPoint &dropPosition);
+
 
 protected:
     void closeEvent(QCloseEvent* event) override;
